@@ -35,9 +35,12 @@ export type VfxElement =
 export type FigureKind = 'wizard' | 'brute' | 'giant' | 'wraith';
 export type Side = 'left' | 'right';
 
+export type WizardVariant = 'classic' | 'angular' | 'hooded' | 'broad' | 'slim' | 'pauldron';
+
 export interface FigureSpec {
   kind: FigureKind;
   element: VfxElement;
+  variant?: WizardVariant;
 }
 
 export interface SceneFighter {
@@ -95,6 +98,14 @@ function dominantElement(mastery: ElementalMastery): VfxElement {
   return mastery[best] > 0 ? best : 'arcane';
 }
 
+const RIVAL_VARIANT: Record<string, WizardVariant> = {
+  rival_vex: 'angular',
+  rival_mira: 'hooded',
+  rival_goran: 'broad',
+  rival_zephyr: 'slim',
+  rival_cinder: 'pauldron',
+};
+
 /** Which low-poly figure stands in for this combatant. */
 export function deriveFigure(p: CombatParticipant, isPlayerSide: boolean): FigureSpec {
   if (isPlayerSide) return PLAYER_FIGURE;
@@ -103,7 +114,7 @@ export function deriveFigure(p: CombatParticipant, isPlayerSide: boolean): Figur
   if (monster && MONSTER_FIGURE[monster.id]) return MONSTER_FIGURE[monster.id];
 
   const rival = RIVALS.find((r) => r.mage.id === p.id);
-  if (rival) return { kind: 'wizard', element: dominantElement(rival.mage.mastery) };
+  if (rival) return { kind: 'wizard', element: dominantElement(rival.mage.mastery), variant: RIVAL_VARIANT[rival.mage.id] };
 
   return { kind: 'wizard', element: 'arcane' };
 }
@@ -282,7 +293,7 @@ interface FigureBuild {
   bob: number;
 }
 
-function buildWizard(pal: RobePalette, rng: () => number): FigureBuild {
+function buildWizard(pal: RobePalette, rng: () => number, variant: WizardVariant = 'classic'): FigureBuild {
   const parts: THREE.BufferGeometry[] = [
     // robe
     part(new THREE.ConeGeometry(0.42, 0.95, 7), pal.robe, rng, { y: 0.47 }),
@@ -292,25 +303,89 @@ function buildWizard(pal: RobePalette, rng: () => number): FigureBuild {
     part(new THREE.CylinderGeometry(0.3, 0.33, 0.07, 7), pal.trim, rng, { y: 0.6, jitter: 0.03 }),
     // head
     part(new THREE.SphereGeometry(0.16, 7, 5), SKIN, rng, { y: 1.0, jitter: 0.03 }),
-    // hat brim
-    part(new THREE.CylinderGeometry(0.34, 0.34, 0.05, 7), pal.robeDark, rng, { y: 1.13 }),
-    // hat cone, slightly askew
-    part(new THREE.ConeGeometry(0.25, 0.6, 7), pal.robe, rng, { y: 1.44, rz: -0.1 }),
-    // hat band
-    part(new THREE.CylinderGeometry(0.23, 0.25, 0.06, 7), pal.trim, rng, { y: 1.18, jitter: 0.03 }),
-    // staff, held toward the opponent
-    part(new THREE.CylinderGeometry(0.045, 0.055, 1.7, 6), WOOD_STAFF, rng, { x: 0.44, y: 0.85, rz: -0.12 }),
   ];
 
+  let staffLen = 1.7;
+  let staffTilt = -0.12;
+  let hatY = 1.44;
+  let hatTilt = -0.1;
+
+  switch (variant) {
+    case 'angular': {
+      // Vex: sharp 4-sided hat, high collar
+      parts.push(part(new THREE.CylinderGeometry(0.36, 0.36, 0.05, 4), pal.robeDark, rng, { y: 1.13, ry: Math.PI / 4 }));
+      parts.push(part(new THREE.ConeGeometry(0.27, 0.72, 4), pal.robe, rng, { y: 1.5, ry: Math.PI / 4, rz: -0.16 }));
+      parts.push(part(new THREE.ConeGeometry(0.2, 0.34, 4), pal.robeDark, rng, { y: 0.98, x: -0.12, rz: 0.3 }));
+      hatY = 0; hatTilt = 0; // hat already placed
+      break;
+    }
+    case 'hooded': {
+      // Mira: hood instead of hat, flowing hem layer
+      parts.push(part(new THREE.SphereGeometry(0.21, 7, 5), pal.robeDark, rng, { y: 1.02, z: -0.02, jitter: 0.03 }));
+      parts.push(part(new THREE.ConeGeometry(0.24, 0.4, 7), pal.robeDark, rng, { y: 1.22, jitter: 0.04 }));
+      parts.push(part(new THREE.ConeGeometry(0.46, 0.4, 7), pal.robe, rng, { y: 0.22, jitter: 0.05 }));
+      hatY = 0; hatTilt = 0;
+      break;
+    }
+    case 'broad': {
+      // Goran: wide low hat, stone-club staff
+      parts.push(part(new THREE.CylinderGeometry(0.4, 0.4, 0.06, 7), pal.robeDark, rng, { y: 1.12 }));
+      parts.push(part(new THREE.ConeGeometry(0.28, 0.42, 7), pal.robe, rng, { y: 1.36, rz: -0.06 }));
+      staffTilt = 0.1;
+      break;
+    }
+    case 'slim': {
+      // Zephyr: small tilted cap + streamers
+      parts.push(part(new THREE.CylinderGeometry(0.22, 0.22, 0.05, 7), pal.robeDark, rng, { y: 1.11 }));
+      parts.push(part(new THREE.ConeGeometry(0.16, 0.34, 7), pal.robe, rng, { y: 1.3, rz: -0.3 }));
+      for (let i = 0; i < 3; i++) {
+        parts.push(part(new THREE.ConeGeometry(0.05, 0.55 + rng() * 0.2, 4), pal.trim, rng, {
+          x: -0.28 - rng() * 0.1, y: 1.0 + rng() * 0.25, rz: 0.7 + rng() * 0.3, jitter: 0.03,
+        }));
+      }
+      hatY = 0; hatTilt = 0;
+      break;
+    }
+    case 'pauldron': {
+      // Cinder: asymmetrical shoulder pauldron, spiked
+      parts.push(part(new THREE.IcosahedronGeometry(0.26, 0), pal.robeDark, rng, { z: -0.4, y: 1.12, jitter: 0.06 }));
+      parts.push(part(new THREE.ConeGeometry(0.07, 0.22, 4), pal.trim, rng, { z: -0.42, y: 1.32, rz: 0.4, jitter: 0.03 }));
+      parts.push(part(new THREE.CylinderGeometry(0.34, 0.34, 0.05, 7), pal.robeDark, rng, { y: 1.13 }));
+      parts.push(part(new THREE.ConeGeometry(0.25, 0.6, 7), pal.robe, rng, { y: 1.44, rz: -0.1 }));
+      break;
+    }
+    default: {
+      // classic: brim + askew cone + band
+      parts.push(part(new THREE.CylinderGeometry(0.34, 0.34, 0.05, 7), pal.robeDark, rng, { y: 1.13 }));
+      parts.push(part(new THREE.ConeGeometry(0.25, 0.6, 7), pal.robe, rng, { y: hatY, rz: hatTilt }));
+      parts.push(part(new THREE.CylinderGeometry(0.23, 0.25, 0.06, 7), pal.trim, rng, { y: 1.18, jitter: 0.03 }));
+      hatY = 0; hatTilt = 0;
+    }
+  }
+
+  if (variant === 'classic') {
+    // staff toward the opponent
+    parts.push(part(new THREE.CylinderGeometry(0.045, 0.055, staffLen, 6), WOOD_STAFF, rng, { x: 0.44, y: 0.85, rz: staffTilt }));
+  } else if (variant === 'broad') {
+    // stone club: thicker shaft + head
+    parts.push(part(new THREE.CylinderGeometry(0.07, 0.09, 1.5, 6), WOOD_STAFF, rng, { x: 0.46, y: 0.8, rz: staffTilt }));
+    parts.push(part(new THREE.IcosahedronGeometry(0.18, 0), '#9a8a70', rng, { x: 0.58, y: 1.45, jitter: 0.05 }));
+  } else {
+    parts.push(part(new THREE.CylinderGeometry(0.045, 0.055, staffLen, 6), WOOD_STAFF, rng, { x: 0.44, y: 0.85, rz: staffTilt }));
+  }
+
   const orb = new THREE.SphereGeometry(0.12, 8, 6);
-  orb.translate(0.545, 1.7, 0);
+  const orbY = variant === 'broad' ? 1.62 : 1.7;
+  orb.translate(0.545, orbY, 0);
+
+  const height = variant === 'broad' ? 1.85 : variant === 'angular' ? 1.9 : 1.78;
 
   return {
     body: mergeGeometries(parts),
     glow: orb,
     glowColor: pal.orb,
     glowEmissive: pal.orb,
-    height: 1.78,
+    height,
     chest: 0.88,
     float: 0,
     bob: 0.035,
@@ -459,7 +534,7 @@ function buildWraith(rng: () => number): FigureBuild {
 }
 
 function buildFigure(spec: FigureSpec): FigureBuild {
-  const rng = mulberry32(spec.kind.length * 7919 + spec.element.length * 104729 + 13);
+  const rng = mulberry32(spec.kind.length * 7919 + spec.element.length * 104729 + (spec.variant?.length ?? 0) * 31 + 13);
   switch (spec.kind) {
     case 'brute':
       return buildBrute(
@@ -474,7 +549,7 @@ function buildFigure(spec: FigureSpec): FigureBuild {
     case 'wraith':
       return buildWraith(rng);
     default:
-      return buildWizard(ROBES[spec.element] ?? ROBES.arcane, rng);
+      return buildWizard(ROBES[spec.element] ?? ROBES.arcane, rng, spec.variant ?? 'classic');
   }
 }
 

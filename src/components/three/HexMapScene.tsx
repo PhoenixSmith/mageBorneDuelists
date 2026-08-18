@@ -4,7 +4,7 @@ import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { useGameStore } from '../../store/gameStore';
-import { hexToPixel, hexNeighbors, HEX_SIZE, mulberry32 } from '../../game/worldgen/worldgen';
+import { hexToPixel, HEX_SIZE, mulberry32 } from '../../game/worldgen/worldgen';
 import { beveledColumn, clamp01, hashString, makeSkyGeometry, part, type PartOpts } from './lowpoly';
 import type { ElementalMastery, HexTile, TerrainType, Settlement, SettlementType } from '../../types';
 
@@ -869,21 +869,39 @@ function HexTileMesh({ hex, isSelected, isPlayerHere, isConclave, settlement, on
     [hex.id, onSelect],
   );
 
+  // Eased hover/select lift — the whole hex rises slightly
+  const liftRef = useRef<THREE.Group>(null);
+  const liftTarget = isSelected ? 0.09 : hovered ? 0.045 : 0;
+  useFrame((_, delta) => {
+    if (!liftRef.current) return;
+    const cur = liftRef.current.position.y;
+    const next = cur + (liftTarget - cur) * Math.min(1, delta * 10);
+    liftRef.current.position.y = next;
+  });
+
   return (
     <group position={[x, 0, y]} onClick={handleClick}>
-      <mesh geometry={geometry} material={TILE_MATERIAL} />
+      <group
+        ref={liftRef}
+        onPointerOver={(e) => { e.stopPropagation(); setHovered(true); }}
+        onPointerOut={() => setHovered(false)}
+      >
+        <mesh geometry={geometry} material={TILE_MATERIAL} />
 
-      {decorations && <mesh geometry={decorations} material={TILE_MATERIAL} position={[0, columnH, 0]} />}
+        {decorations && <mesh geometry={decorations} material={TILE_MATERIAL} position={[0, columnH, 0]} />}
 
-      {discovered && isWater && <WaterSurface phase={phase} />}
+        {discovered && isWater && <WaterSurface phase={phase} />}
 
-      {!discovered && <FogMist phase={phase} />}
+        {!discovered && <FogMist phase={phase} />}
 
-      {isSelected && <SelectedHalo topY={topY} />}
+        {isSelected && <SelectedHalo topY={topY} />}
 
-      {settlement && discovered && <SettlementMarker settlement={settlement} topY={topY} />}
+        {settlement && discovered && <SettlementMarker settlement={settlement} topY={topY} labeled={isSelected} />}
 
-      {isPlayerHere && discovered && <PlayerMarker topY={topY} />}
+        {isConclave && discovered && <ConclaveArena topY={topY} />}
+
+        {isPlayerHere && discovered && <PlayerMarker topY={topY} />}
+      </group>
     </group>
   );
 }
@@ -911,6 +929,12 @@ function SceneContents() {
   const selectHex = useGameStore((s) => s.selectHex);
 
   const hexes = useMemo(() => Object.values(world.hexes), [world.hexes]);
+
+  // The Conclave's seat: the first nexus settlement in world order
+  const conclaveHexId = useMemo(() => {
+    const nexus = Object.values(world.settlements).find((s) => s.type === 'nexus');
+    return nexus?.hexId ?? null;
+  }, [world.settlements]);
 
   const handleSelect = useCallback((id: string) => selectHex(id), [selectHex]);
 
@@ -945,6 +969,7 @@ function SceneContents() {
           hex={hex}
           isSelected={selectedHexId === hex.id}
           isPlayerHere={world.playerHexId === hex.id}
+          isConclave={hex.id === conclaveHexId}
           settlement={hex.settlementId ? world.settlements[hex.settlementId] : undefined}
           onSelect={handleSelect}
         />
