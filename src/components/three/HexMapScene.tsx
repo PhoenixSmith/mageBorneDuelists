@@ -1,11 +1,12 @@
-import { useMemo, useRef, useCallback } from 'react';
+import { useMemo, useRef, useState, useCallback } from 'react';
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { useGameStore } from '../../store/gameStore';
-import { hexToPixel, HEX_SIZE, mulberry32 } from '../../game/worldgen/worldgen';
-import type { HexTile, TerrainType, Settlement, SettlementType } from '../../types';
+import { hexToPixel, hexNeighbors, HEX_SIZE, mulberry32 } from '../../game/worldgen/worldgen';
+import { beveledColumn, clamp01, hashString, makeSkyGeometry, part, type PartOpts } from './lowpoly';
+import type { ElementalMastery, HexTile, TerrainType, Settlement, SettlementType } from '../../types';
 
 // ---------------------------------------------------------------------------
 // Constants & palette
@@ -32,15 +33,17 @@ const TERRAIN_STYLE: Record<TerrainType, TerrainStyle> = {
   ruins: { top: '#8f9298', side: '#6d7076', height: 0.3 },
 };
 
-const UNDISCOVERED_STYLE: TerrainStyle = { top: '#161c2c', side: '#0e1220', height: 0.1 };
+// Unmapped country reads as pale morning haze, not a hole in the world
+const UNDISCOVERED_STYLE: TerrainStyle = { top: '#9a93ad', side: '#7d7791', height: 0.1 };
 
 const WATER_SURFACE_Y = 0.23; // above the sunken water bed, below all land tops
 const MIST_Y = UNDISCOVERED_STYLE.height + 0.16;
 
-const SKY_ZENITH = '#101830';
-const SKY_HORIZON = '#4a4670';
-const SKY_BELOW = '#0b0e1a';
-const FOG_COLOR = '#3a3960';
+// Dawn over the almanac's world: lilac crown, amber sun, cream horizon
+const SKY_ZENITH = '#8b93cf';
+const SKY_HORIZON = '#f6ddb4';
+const SKY_BELOW = '#d8c19c';
+const FOG_COLOR = '#e6d3bb';
 
 const FOREST_GREENS = ['#4a8a33', '#3d7a2c', '#579440', '#4f8f3f'];
 const CITY_WALLS = ['#e8dcc8', '#dfd2b8', '#d8c8ae', '#e2d5c0'];
@@ -76,148 +79,6 @@ const MIST_MATERIAL = new THREE.MeshStandardMaterial({
 });
 
 // ---------------------------------------------------------------------------
-// Small helpers
-// ---------------------------------------------------------------------------
-
-function hashString(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-const clamp01 = (v: number) => THREE.MathUtils.clamp(v, 0, 1);
-
-/**
- * Convert to non-indexed geometry and add a per-face jittered vertex color.
- * Faceted color variation is what keeps flat-shaded low-poly from looking
- * like colored plastic.
- */
-function paintGeometry(
-  src: THREE.BufferGeometry,
-  color: THREE.Color,
-  jitter: number,
-  rng: () => number,
-): THREE.BufferGeometry {
-  const g = src.index ? src.toNonIndexed() : src;
-  if (g !== src) src.dispose();
-  const count = g.attributes.position.count;
-  const colors = new Float32Array(count * 3);
-  for (let i = 0; i < count; i += 3) {
-    const o = (rng() - 0.5) * 2 * jitter;
-    const r = clamp01(color.r + o);
-    const gr = clamp01(color.g + o);
-    const b = clamp01(color.b + o);
-    for (let j = i; j < Math.min(i + 3, count); j++) {
-      colors[j * 3] = r;
-      colors[j * 3 + 1] = gr;
-      colors[j * 3 + 2] = b;
-    }
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  return g;
-}
-
-interface PartOpts {
-  x?: number;
-  y?: number;
-  z?: number;
-  rx?: number;
-  ry?: number;
-  rz?: number;
-  s?: number;
-  sy?: number;
-  jitter?: number;
-}
-
-/** Paint + transform a primitive so it can be merged into one tile mesh. */
-function part(
-  geom: THREE.BufferGeometry,
-  color: string,
-  rng: () => number,
-  o: PartOpts = {},
-): THREE.BufferGeometry {
-  const g = paintGeometry(geom, new THREE.Color(color), o.jitter ?? 0.05, rng);
-  const s = o.s ?? 1;
-  g.scale(s, o.sy ?? s, s);
-  if (o.rx) g.rotateX(o.rx);
-  if (o.rz) g.rotateZ(o.rz);
-  if (o.ry) g.rotateY(o.ry);
-  g.translate(o.x ?? 0, o.y ?? 0, o.z ?? 0);
-  return g;
-}
-
-// ---------------------------------------------------------------------------
-// Hex column geometry — beveled top plateau, per-vertex color variation
-// ---------------------------------------------------------------------------
-
-function buildHexColumn(
-  radius: number,
-  height: number,
-  topColor: string,
-  sideColor: string,
-  rng: () => number,
-): THREE.BufferGeometry {
-  const top = new THREE.Color(topColor);
-  const side = new THREE.Color(sideColor);
-  const bevelCol = top.clone().lerp(new THREE.Color('#ffffff'), 0.12);
-  const bevelH = Math.min(0.05, height * 0.22);
-  const inset = radius * 0.12;
-  const rimY = height - bevelH;
-
-  const corners: Array<[number, number]> = [];
-  for (let i = 0; i < 6; i++) {
-    const a = (Math.PI / 3) * i + Math.PI / 6; // pointy-top
-    corners.push([Math.cos(a), Math.sin(a)]);
-  }
-
-  const positions: number[] = [];
-  const colors: number[] = [];
-
-  const pushTri = (
-    ax: number, ay: number, az: number,
-    bx: number, by: number, bz: number,
-    cx: number, cy: number, cz: number,
-    col: THREE.Color,
-    offset: number,
-  ) => {
-    positions.push(ax, ay, az, bx, by, bz, cx, cy, cz);
-    const r = clamp01(col.r + offset);
-    const g = clamp01(col.g + offset);
-    const b = clamp01(col.b + offset);
-    for (let k = 0; k < 3; k++) colors.push(r, g, b);
-  };
-
-  for (let i = 0; i < 6; i++) {
-    const [x0, z0] = corners[i];
-    const [x1, z1] = corners[(i + 1) % 6];
-    const oR = radius;
-    const iR = radius - inset;
-
-    // side wall — one shared shade per facet
-    const so = (rng() - 0.5) * 0.1;
-    pushTri(x0 * oR, 0, z0 * oR, x0 * oR, rimY, z0 * oR, x1 * oR, rimY, z1 * oR, side, so);
-    pushTri(x0 * oR, 0, z0 * oR, x1 * oR, rimY, z1 * oR, x1 * oR, 0, z1 * oR, side, so);
-
-    // bevel between rim and top plateau — slightly lighter edge highlight
-    const bo = (rng() - 0.5) * 0.08;
-    pushTri(x0 * oR, rimY, z0 * oR, x0 * iR, height, z0 * iR, x1 * iR, height, z1 * iR, bevelCol, bo);
-    pushTri(x0 * oR, rimY, z0 * oR, x1 * iR, height, z1 * iR, x1 * oR, rimY, z1 * oR, bevelCol, bo);
-
-    // top plateau fan
-    pushTri(0, height, 0, x1 * iR, height, z1 * iR, x0 * iR, height, z0 * iR, top, (rng() - 0.5) * 0.07);
-  }
-
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geom.computeVertexNormals();
-  return geom;
-}
-
-// ---------------------------------------------------------------------------
 // Terrain decorations — merged into ONE mesh per tile for draw-call budget
 // ---------------------------------------------------------------------------
 
@@ -231,42 +92,66 @@ function buildDecorations(terrain: TerrainType, rng: () => number): THREE.Buffer
 
   switch (terrain) {
     case 'forest': {
-      const n = 3 + Math.floor(rng() * 2);
+      // one grove: trees huddle around a shared heart, tallest at the centre
+      const ga = rng() * Math.PI * 2;
+      const gd = rng() * 0.26;
+      const gx = Math.cos(ga) * gd;
+      const gz = Math.sin(ga) * gd;
+      const n = 4 + Math.floor(rng() * 2);
       for (let k = 0; k < n; k++) {
-        const { x, z } = scatter(0.12, 0.55);
-        const th = 0.26 + rng() * 0.16;
-        const tr = 0.1 + rng() * 0.05;
+        const a = rng() * Math.PI * 2;
+        const d = k === 0 ? 0 : 0.1 + rng() * 0.24;
+        let x = gx + Math.cos(a) * d;
+        let z = gz + Math.sin(a) * d;
+        const len = Math.hypot(x, z);
+        if (len > 0.55) { x *= 0.55 / len; z *= 0.55 / len; }
+        const heart = 1 - Math.min(1, d * 2.4); // 1 at the grove centre, 0 at the fringe
+        const th = (0.2 + rng() * 0.1) * (0.85 + heart * 0.65);
+        const tr = (0.085 + rng() * 0.04) * (0.9 + heart * 0.35);
         const green = FOREST_GREENS[Math.floor(rng() * FOREST_GREENS.length)];
         parts.push(part(new THREE.CylinderGeometry(0.022, 0.034, 0.09, 5), '#6b4a32', rng, { x, z, y: 0.045, jitter: 0.03 }));
         parts.push(part(new THREE.ConeGeometry(tr, th, 6), green, rng, { x, z, y: 0.07 + th / 2, ry: rng() * Math.PI }));
-        if (rng() > 0.5) {
+        if (heart > 0.4) {
           parts.push(part(new THREE.ConeGeometry(tr * 0.62, th * 0.6, 6), green, rng, { x, z, y: 0.07 + th * 0.82, ry: rng() * Math.PI }));
         }
       }
       break;
     }
     case 'jungle': {
+      // dense knot of canopy around one point, undergrowth at its feet
+      const ga = rng() * Math.PI * 2;
+      const gx = Math.cos(ga) * 0.2;
+      const gz = Math.sin(ga) * 0.2;
       for (let k = 0; k < 3; k++) {
-        const { x, z } = scatter(0.1, 0.5);
-        const th = 0.3 + rng() * 0.18;
+        const a = rng() * Math.PI * 2;
+        const d = k === 0 ? 0 : 0.12 + rng() * 0.16;
+        const x = gx + Math.cos(a) * d;
+        const z = gz + Math.sin(a) * d;
+        const th = (0.3 + rng() * 0.18) * (k === 0 ? 1.15 : 0.9);
         parts.push(part(new THREE.CylinderGeometry(0.025, 0.04, 0.14, 5), '#54402e', rng, { x, z, y: 0.07, jitter: 0.03 }));
         parts.push(part(new THREE.ConeGeometry(0.14 + rng() * 0.05, th, 6), '#2f6b28', rng, { x, z, y: 0.12 + th / 2, ry: rng() * Math.PI, jitter: 0.06 }));
       }
-      const bush = scatter(0.2, 0.5);
-      parts.push(part(new THREE.IcosahedronGeometry(0.12, 0), '#357a2b', rng, { ...bush, y: 0.07, sy: 0.65, jitter: 0.06 }));
+      parts.push(part(new THREE.IcosahedronGeometry(0.12, 0), '#357a2b', rng, {
+        x: gx - Math.cos(ga) * 0.34, z: gz - Math.sin(ga) * 0.34, y: 0.07, sy: 0.65, jitter: 0.06,
+      }));
       break;
     }
     case 'mountains': {
-      const n = 2 + Math.floor(rng() * 2);
+      // peaks march along a single ridge line, summit in the middle
+      const ridge = rng() * Math.PI;
+      const n = 3;
       for (let k = 0; k < n; k++) {
-        const pos = k === 0
-          ? { x: (rng() - 0.5) * 0.16, z: (rng() - 0.5) * 0.16 }
-          : scatter(0.24, 0.46);
-        const h = k === 0 ? 0.5 + rng() * 0.25 : 0.28 + rng() * 0.18;
+        const along = (k - (n - 1) / 2) * (0.28 + rng() * 0.08);
+        const off = (rng() - 0.5) * 0.14;
+        const pos = {
+          x: Math.cos(ridge) * along - Math.sin(ridge) * off,
+          z: Math.sin(ridge) * along + Math.cos(ridge) * off,
+        };
+        const h = k === 1 ? 0.52 + rng() * 0.22 : 0.28 + rng() * 0.16;
         const r = h * 0.52;
         const ry = rng() * Math.PI;
         parts.push(part(new THREE.ConeGeometry(r, h, 5), '#8a7568', rng, { ...pos, y: h / 2 - 0.02, ry, jitter: 0.07 }));
-        if (k === 0 || rng() > 0.45) {
+        if (k === 1 || rng() > 0.45) {
           // snow cap — coaxial smaller cone matching the peak's facets
           parts.push(part(new THREE.ConeGeometry(r * 0.34, h * 0.34, 5), '#eef3f6', rng, { ...pos, y: h * 0.68 + h * 0.17 - 0.02, ry, jitter: 0.03 }));
         }
@@ -405,7 +290,7 @@ function getMistGeometry(): THREE.BufferGeometry {
     for (let k = 0; k < 4; k++) {
       const a = rng() * Math.PI * 2;
       const d = k === 0 ? 0 : 0.2 + rng() * 0.3;
-      blobs.push(part(new THREE.IcosahedronGeometry(0.28 + rng() * 0.14, 0), '#1c2233', rng, {
+      blobs.push(part(new THREE.IcosahedronGeometry(0.28 + rng() * 0.14, 0), '#c3bcd2', rng, {
         x: Math.cos(a) * d,
         z: Math.sin(a) * d,
         y: (rng() - 0.5) * 0.06,
@@ -469,64 +354,96 @@ function ContactShadow({ y, radius }: { y: number; radius: number }) {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, 0]}>
       <circleGeometry args={[radius, 12]} />
-      <meshBasicMaterial color="#04060c" transparent opacity={0.28} depthWrite={false} />
+      <meshBasicMaterial color="#4a3520" transparent opacity={0.26} depthWrite={false} />
     </mesh>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Player marker — little wizard with an orbiting familiar orb
+// Player marker — the protagonist: flared robe, wide-brim hat, staff + orb
 // ---------------------------------------------------------------------------
 
+type OrbElement = 'fire' | 'water' | 'wind' | 'earth' | 'none';
+
+const MARKER_ORB: Record<OrbElement, { core: string; glow: string }> = {
+  fire: { core: '#ffd8a8', glow: '#ff8a3c' },
+  water: { core: '#dff4ff', glow: '#57c8f5' },
+  wind: { core: '#eefcff', glow: '#9fe8ff' },
+  earth: { core: '#f2e3c0', glow: '#e3c07a' },
+  none: { core: '#ffd8a8', glow: '#ff8a3c' }, // untrained hands still hold an ember
+};
+
+function dominantMastery(m: ElementalMastery): OrbElement {
+  let best: keyof ElementalMastery = 'fire';
+  for (const el of ['fire', 'water', 'wind', 'earth'] as const) {
+    if (m[el] > m[best]) best = el;
+  }
+  return m[best] > 0 ? best : 'none';
+}
+
+// One merged body mesh, cut once at module scope — every field sees the same wizard
+const PLAYER_BODY_GEOMETRY = (() => {
+  const rng = mulberry32(9021);
+  return mergeGeometries([
+    // trailing hem + flared robe
+    part(new THREE.ConeGeometry(0.21, 0.1, 7), '#4c1d95', rng, { y: 0.05 }),
+    part(new THREE.ConeGeometry(0.185, 0.4, 7), '#6d28d9', rng, { y: 0.24 }),
+    // shoulder shawl + sash
+    part(new THREE.ConeGeometry(0.15, 0.13, 7), '#4c1d95', rng, { y: 0.4 }),
+    part(new THREE.CylinderGeometry(0.12, 0.135, 0.032, 7), '#c4b5fd', rng, { y: 0.29, jitter: 0.03 }),
+    // head
+    part(new THREE.SphereGeometry(0.068, 7, 5), '#f2cfae', rng, { y: 0.47, jitter: 0.03 }),
+    // wide hat brim, band, and a slightly askew cone
+    part(new THREE.CylinderGeometry(0.16, 0.168, 0.022, 7), '#4c1d95', rng, { y: 0.525 }),
+    part(new THREE.CylinderGeometry(0.096, 0.108, 0.028, 7), '#c4b5fd', rng, { y: 0.548, jitter: 0.03 }),
+    part(new THREE.ConeGeometry(0.105, 0.28, 7), '#5b21b6', rng, { y: 0.67, rz: -0.09 }),
+    // staff planted at the right hand
+    part(new THREE.CylinderGeometry(0.016, 0.021, 0.64, 6), '#6b4a32', rng, { x: 0.19, y: 0.32, rz: -0.06 }),
+  ]);
+})();
+
 function PlayerMarker({ topY }: { topY: number }) {
+  const mastery = useGameStore((s) => s.world.player.mastery);
+  const orbColors = MARKER_ORB[dominantMastery(mastery)];
   const body = useRef<THREE.Group>(null);
-  const orb = useRef<THREE.Group>(null);
+  const orbMat = useRef<THREE.MeshStandardMaterial>(null);
+  const haloMat = useRef<THREE.MeshBasicMaterial>(null);
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
-    if (body.current) body.current.position.y = topY + 0.02 + Math.sin(t * 2) * 0.04;
-    if (orb.current) {
-      orb.current.position.set(
-        Math.cos(t * 0.9) * 0.24,
-        0.34 + Math.sin(t * 2.6) * 0.04,
-        Math.sin(t * 0.9) * 0.24,
-      );
-    }
+    if (body.current) body.current.position.y = topY + 0.02 + Math.sin(t * 2) * 0.035;
+    const pulse = 0.5 + Math.sin(t * 2.6) * 0.5;
+    if (orbMat.current) orbMat.current.emissiveIntensity = 1.9 + pulse * 1.2;
+    if (haloMat.current) haloMat.current.opacity = 0.18 + pulse * 0.14;
   });
 
   return (
     <group>
-      <ContactShadow y={topY + 0.012} radius={0.26} />
+      <ContactShadow y={topY + 0.012} radius={0.24} />
       <group ref={body} position={[0, topY + 0.02, 0]}>
-        {/* robe */}
-        <mesh position={[0, 0.17, 0]}>
-          <coneGeometry args={[0.15, 0.34, 7]} />
-          <meshStandardMaterial color="#6d28d9" flatShading roughness={0.8} />
-        </mesh>
-        {/* head */}
-        <mesh position={[0, 0.36, 0]}>
-          <sphereGeometry args={[0.065, 7, 5]} />
-          <meshStandardMaterial color="#f2cfae" flatShading roughness={0.7} />
-        </mesh>
-        {/* hat brim */}
-        <mesh position={[0, 0.41, 0]}>
-          <cylinderGeometry args={[0.13, 0.13, 0.022, 7]} />
-          <meshStandardMaterial color="#4c1d95" flatShading roughness={0.75} />
-        </mesh>
-        {/* hat cone, slightly askew */}
-        <mesh position={[0, 0.52, 0]} rotation={[0, 0, 0.08]}>
-          <coneGeometry args={[0.095, 0.22, 7]} />
-          <meshStandardMaterial color="#5b21b6" flatShading roughness={0.75} />
-        </mesh>
-        {/* familiar orb + additive glow shell */}
-        <group ref={orb} position={[0.24, 0.34, 0]}>
+        <mesh geometry={PLAYER_BODY_GEOMETRY} material={TILE_MATERIAL} />
+        {/* staff orb + additive halo, tinted by the player's strongest element */}
+        <group position={[0.208, 0.67, 0]}>
           <mesh>
-            <sphereGeometry args={[0.045, 8, 6]} />
-            <meshStandardMaterial color="#bdf3ff" emissive="#38d6f8" emissiveIntensity={2.2} roughness={0.3} />
+            <sphereGeometry args={[0.046, 8, 6]} />
+            <meshStandardMaterial
+              ref={orbMat}
+              color={orbColors.core}
+              emissive={orbColors.glow}
+              emissiveIntensity={2.2}
+              roughness={0.3}
+            />
           </mesh>
           <mesh>
-            <sphereGeometry args={[0.09, 8, 6]} />
-            <meshBasicMaterial color="#67e8f9" transparent opacity={0.22} blending={THREE.AdditiveBlending} depthWrite={false} />
+            <sphereGeometry args={[0.095, 8, 6]} />
+            <meshBasicMaterial
+              ref={haloMat}
+              color={orbColors.glow}
+              transparent
+              opacity={0.22}
+              blending={THREE.AdditiveBlending}
+              depthWrite={false}
+            />
           </mesh>
         </group>
       </group>
@@ -543,6 +460,20 @@ interface SettlementBuild {
   glow: THREE.BufferGeometry | null;
   glowColor: string;
   glowEmissive: string;
+  /** tiny warm window lights — emissive dots that make the place feel lived-in */
+  windows: THREE.BufferGeometry | null;
+}
+
+const WINDOW_GEOM = new THREE.BoxGeometry(0.018, 0.026, 0.018);
+
+function windowsAt(spots: Array<[number, number, number]>): THREE.BufferGeometry {
+  const bits: THREE.BufferGeometry[] = [];
+  for (const [x, y, z] of spots) {
+    const g = WINDOW_GEOM.clone();
+    g.translate(x, y, z);
+    bits.push(g);
+  }
+  return mergeGeometries(bits);
 }
 
 function prismRoof(radius: number, len: number, color: string, rng: () => number, o: PartOpts): THREE.BufferGeometry {
@@ -557,22 +488,51 @@ function buildSettlementGeometry(type: SettlementType, seed: number): Settlement
   let glow: THREE.BufferGeometry | null = null;
   let glowColor = '';
   let glowEmissive = '';
+  let windows: THREE.BufferGeometry | null = null;
 
   switch (type) {
     case 'city': {
-      for (let k = 0; k < 5; k++) {
-        const a = (k / 5) * Math.PI * 2 + rng() * 0.8;
-        const d = k === 0 ? 0 : 0.26 + rng() * 0.12;
+      // curtain wall — hexagonal parapet ring with a gate gap and corner towers
+      const wallR = 0.43;
+      const gate = Math.floor(rng() * 6);
+      for (let k = 0; k < 6; k++) {
+        if (k === gate) continue;
+        const a0 = (k / 6) * Math.PI * 2;
+        const a1 = ((k + 1) / 6) * Math.PI * 2;
+        const mx = (Math.cos(a0) + Math.cos(a1)) * 0.5 * wallR;
+        const mz = (Math.sin(a0) + Math.sin(a1)) * 0.5 * wallR;
+        const len = 2 * wallR * Math.sin(Math.PI / 6);
+        parts.push(part(new THREE.BoxGeometry(len * 0.92, 0.085, 0.05), '#d8c8ae', rng, {
+          x: mx, z: mz, y: 0.042, ry: -((a0 + a1) / 2) + Math.PI / 2, jitter: 0.03,
+        }));
+      }
+      for (let k = 0; k < 6; k += 2) {
+        const a = (k / 6) * Math.PI * 2;
+        const tx = Math.cos(a) * wallR;
+        const tz = Math.sin(a) * wallR;
+        parts.push(part(new THREE.CylinderGeometry(0.046, 0.058, 0.17, 6), '#e2d5c0', rng, { x: tx, z: tz, y: 0.085, jitter: 0.03 }));
+        parts.push(part(new THREE.ConeGeometry(0.062, 0.075, 6), '#8c4a3c', rng, { x: tx, z: tz, y: 0.21, jitter: 0.04 }));
+      }
+      // central keep with a banner flying from the roof
+      parts.push(part(new THREE.BoxGeometry(0.17, 0.3, 0.17), '#e8dcc8', rng, { y: 0.15, jitter: 0.03 }));
+      parts.push(part(new THREE.ConeGeometry(0.135, 0.12, 4), '#5a6b8c', rng, { y: 0.36, ry: Math.PI / 4, jitter: 0.04 }));
+      parts.push(part(new THREE.CylinderGeometry(0.006, 0.006, 0.15, 4), '#6b4a32', rng, { y: 0.49 }));
+      parts.push(part(new THREE.BoxGeometry(0.085, 0.05, 0.008), '#b5563c', rng, { x: 0.05, y: 0.53, jitter: 0.02 }));
+      // houses in the ward
+      for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2 + 0.7 + rng() * 0.5;
+        const d = 0.25 + rng() * 0.05;
         const x = Math.cos(a) * d;
         const z = Math.sin(a) * d;
-        const w = 0.13 + rng() * 0.06;
-        const h = (k === 0 ? 0.3 : 0.16) + rng() * 0.16;
-        const wall = CITY_WALLS[Math.floor(rng() * CITY_WALLS.length)];
-        const roof = CITY_ROOFS[Math.floor(rng() * CITY_ROOFS.length)];
-        parts.push(part(new THREE.BoxGeometry(w, h, w), wall, rng, { x, z, y: h / 2, jitter: 0.03 }));
-        const rh = 0.09 + rng() * 0.07;
-        parts.push(part(new THREE.ConeGeometry(w * 0.82, rh, 4), roof, rng, { x, z, y: h + rh / 2, ry: Math.PI / 4, jitter: 0.04 }));
+        const w = 0.09 + rng() * 0.03;
+        const h = 0.08 + rng() * 0.05;
+        parts.push(part(new THREE.BoxGeometry(w, h, w), CITY_WALLS[Math.floor(rng() * CITY_WALLS.length)], rng, { x, z, y: h / 2, jitter: 0.03 }));
+        parts.push(part(new THREE.ConeGeometry(w * 0.8, 0.07, 4), CITY_ROOFS[Math.floor(rng() * CITY_ROOFS.length)], rng, { x, z, y: h + 0.035, ry: Math.PI / 4, jitter: 0.04 }));
       }
+      windows = windowsAt([
+        [0.088, 0.2, 0.03], [0.088, 0.12, -0.045], [-0.088, 0.23, -0.02],
+        [0.02, 0.18, 0.088], [-0.04, 0.1, -0.088],
+      ]);
       break;
     }
     case 'town': {
@@ -587,18 +547,37 @@ function buildSettlementGeometry(type: SettlementType, seed: number): Settlement
         const ry = rng() * Math.PI;
         parts.push(part(new THREE.BoxGeometry(w, h, w * 0.85), '#e6d9be', rng, { x, z, y: h / 2, ry, jitter: 0.03 }));
         parts.push(prismRoof(w * 0.62, w * 1.2, '#a05038', rng, { x, z, y: h, ry }));
+        if (k === 0) windows = windowsAt([[x + w * 0.5, h * 0.55, z], [x - w * 0.45, h * 0.5, z + 0.02]]);
       }
       break;
     }
     case 'college': {
-      parts.push(part(new THREE.BoxGeometry(0.3, 0.12, 0.3), '#cbd5e1', rng, { y: 0.06, ry: rng() * Math.PI, jitter: 0.03 }));
-      parts.push(part(new THREE.CylinderGeometry(0.085, 0.115, 0.5, 6), '#dbe3ec', rng, { y: 0.37, jitter: 0.03 }));
-      parts.push(part(new THREE.CylinderGeometry(0.125, 0.125, 0.035, 6), '#aab6c4', rng, { y: 0.635, jitter: 0.03 }));
-      parts.push(part(new THREE.ConeGeometry(0.13, 0.22, 6), '#3b4a8c', rng, { y: 0.765, jitter: 0.04 }));
-      glow = new THREE.SphereGeometry(0.05, 8, 6);
-      glow.translate(0, 0.95, 0);
-      glowColor = '#ffe4b0';
-      glowEmissive = '#ffb347';
+      // stepped plinth carrying a cluster of spired towers
+      parts.push(part(new THREE.CylinderGeometry(0.3, 0.34, 0.07, 6), '#b9c2cd', rng, { y: 0.035, ry: rng() * Math.PI, jitter: 0.03 }));
+      const towers = [
+        { x: 0, z: 0, r: 0.085, h: 0.5, spire: 0.24, wall: '#dbe3ec' },
+        { x: 0.2, z: 0.1, r: 0.054, h: 0.3, spire: 0.16, wall: '#cdd7e2' },
+        { x: -0.14, z: -0.18, r: 0.06, h: 0.36, spire: 0.18, wall: '#d4dde7' },
+      ];
+      for (const tw of towers) {
+        parts.push(part(new THREE.CylinderGeometry(tw.r, tw.r * 1.3, tw.h, 6), tw.wall, rng, { x: tw.x, z: tw.z, y: 0.07 + tw.h / 2, jitter: 0.03 }));
+        parts.push(part(new THREE.CylinderGeometry(tw.r * 1.42, tw.r * 1.42, 0.03, 6), '#aab6c4', rng, { x: tw.x, z: tw.z, y: 0.085 + tw.h, jitter: 0.03 }));
+        parts.push(part(new THREE.ConeGeometry(tw.r * 1.5, tw.spire, 6), '#3b4a8c', rng, { x: tw.x, z: tw.z, y: 0.1 + tw.h + tw.spire / 2, jitter: 0.04 }));
+      }
+      // arcane study orbs adrift between the spires
+      const orbBits: THREE.BufferGeometry[] = [];
+      for (const [ox, oy, oz] of [[0.15, 0.82, -0.09], [-0.17, 0.66, 0.13], [0.04, 0.95, 0.07]]) {
+        const s = new THREE.SphereGeometry(0.032, 8, 6);
+        s.translate(ox, oy, oz);
+        orbBits.push(s);
+      }
+      glow = mergeGeometries(orbBits);
+      glowColor = '#e6dcff';
+      glowEmissive = '#8b5cf6';
+      windows = windowsAt([
+        [0.086, 0.34, 0.02], [0.086, 0.48, -0.03], [-0.086, 0.42, 0.03],
+        [0.2 + 0.055, 0.28, 0.1], [-0.14, 0.32, -0.18 + 0.06],
+      ]);
       break;
     }
     case 'nexus': {
@@ -650,6 +629,7 @@ function buildSettlementGeometry(type: SettlementType, seed: number): Settlement
       parts.push(part(new THREE.ConeGeometry(0.09, 0.08, 4), '#8c5a40', rng, {
         x: Math.cos(a) * 0.3, z: Math.sin(a) * 0.3, y: 0.13, ry: Math.PI / 4, jitter: 0.04,
       }));
+      windows = windowsAt([[0.14, 0.09, 0.06], [-0.1, 0.08, -0.1]]);
       break;
     }
   }
@@ -659,20 +639,68 @@ function buildSettlementGeometry(type: SettlementType, seed: number): Settlement
     glow,
     glowColor,
     glowEmissive,
+    windows,
   };
 }
 
-function SettlementMarker({ settlement, topY }: { settlement: Settlement; topY: number }) {
+// Parchment name plates, drawn once per settlement and cached
+const labelCache = new Map<string, THREE.CanvasTexture>();
+
+function labelTexture(name: string): THREE.CanvasTexture | null {
+  const cached = labelCache.get(name);
+  if (cached) return cached;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  // ink on parchment — #3d2f24 on #f3ead8 clears 4.5:1 with lots of room
+  ctx.beginPath();
+  ctx.roundRect(10, 14, 492, 100, 26);
+  ctx.fillStyle = '#f3ead8';
+  ctx.fill();
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = '#3d2f24';
+  ctx.stroke();
+
+  ctx.fillStyle = '#3d2f24';
+  ctx.font = 'bold 52px Georgia, "Palatino Linotype", serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(name, 256, 66, 452);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  labelCache.set(name, tex);
+  return tex;
+}
+
+function SettlementLabel({ name, y }: { name: string; y: number }) {
+  const tex = labelTexture(name);
+  if (!tex) return null;
+  return (
+    <sprite position={[0, y, 0]} scale={[1.7, 0.42, 1]}>
+      <spriteMaterial map={tex} transparent depthWrite={false} toneMapped={false} />
+    </sprite>
+  );
+}
+
+function SettlementMarker({ settlement, topY, labeled }: { settlement: Settlement; topY: number; labeled: boolean }) {
   const seed = hashString(settlement.id);
   const build = useMemo(() => buildSettlementGeometry(settlement.type, seed), [settlement.type, seed]);
   const group = useRef<THREE.Group>(null);
   const glowMat = useRef<THREE.MeshStandardMaterial>(null);
+  const winMat = useRef<THREE.MeshStandardMaterial>(null);
   const phase = ((seed % 1000) / 1000) * Math.PI * 2;
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
     if (group.current) group.current.scale.setScalar(1 + Math.sin(t * 1.8 + phase) * 0.025);
     if (glowMat.current) glowMat.current.emissiveIntensity = 1.6 + Math.sin(t * 2.2 + phase) * 0.7;
+    // hearth-light flicker, slower and subtler than the arcane glow
+    if (winMat.current) winMat.current.emissiveIntensity = 1.55 + Math.sin(t * 2.7 + phase) * 0.3;
   });
 
   return (
@@ -692,7 +720,96 @@ function SettlementMarker({ settlement, topY }: { settlement: Settlement; topY: 
             />
           </mesh>
         )}
+        {build.windows && (
+          <mesh geometry={build.windows}>
+            <meshStandardMaterial
+              ref={winMat}
+              color="#ffdf9c"
+              emissive="#ffaa33"
+              emissiveIntensity={1.55}
+              roughness={0.4}
+            />
+          </mesh>
+        )}
       </group>
+      {labeled && <SettlementLabel name={settlement.name} y={1.15} />}
+    </group>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The Conclave — concentric duelling rings where the whole season points
+// ---------------------------------------------------------------------------
+
+const CONCLAVE_GEOMETRY = (() => {
+  const rng = mulberry32(777001);
+  const parts: THREE.BufferGeometry[] = [
+    // stepped stone rings
+    part(new THREE.CylinderGeometry(0.52, 0.56, 0.05, 9), '#cbb68f', rng, { y: 0.025, jitter: 0.04 }),
+    part(new THREE.CylinderGeometry(0.36, 0.4, 0.05, 9), '#bda67c', rng, { y: 0.075, jitter: 0.04 }),
+    part(new THREE.CylinderGeometry(0.2, 0.24, 0.05, 9), '#cbb68f', rng, { y: 0.125, jitter: 0.04 }),
+    // central brazier bowl
+    part(new THREE.CylinderGeometry(0.07, 0.045, 0.07, 6), '#5f5348', rng, { y: 0.185, jitter: 0.04 }),
+  ];
+  // ring of standing stones
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2 + 0.26;
+    parts.push(part(new THREE.CylinderGeometry(0.035, 0.05, 0.2 + rng() * 0.06, 5), '#a89a86', rng, {
+      x: Math.cos(a) * 0.47, z: Math.sin(a) * 0.47, y: 0.14,
+      rz: (rng() - 0.5) * 0.12, ry: rng() * Math.PI, jitter: 0.05,
+    }));
+  }
+  // banner poles with crimson pennants
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2 + 1.1;
+    const x = Math.cos(a) * 0.3;
+    const z = Math.sin(a) * 0.3;
+    parts.push(part(new THREE.CylinderGeometry(0.008, 0.011, 0.44, 4), '#6b4a32', rng, { x, z, y: 0.3 }));
+    parts.push(part(new THREE.BoxGeometry(0.1, 0.055, 0.008), '#a3342a', rng, {
+      x: x + Math.cos(a + Math.PI / 2) * 0.055,
+      z: z + Math.sin(a + Math.PI / 2) * 0.055,
+      y: 0.47,
+      ry: -(a + Math.PI / 2),
+      jitter: 0.03,
+    }));
+  }
+  return mergeGeometries(parts);
+})();
+
+function ConclaveArena({ topY }: { topY: number }) {
+  const flame = useRef<THREE.Mesh>(null);
+  const glowMat = useRef<THREE.MeshBasicMaterial>(null);
+
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    const f = 0.85 + Math.abs(Math.sin(t * 5.2)) * 0.4 + Math.sin(t * 9.7) * 0.1;
+    if (flame.current) {
+      flame.current.scale.set(0.9 + (f - 1) * 0.3, f, 0.9 + (f - 1) * 0.3);
+      flame.current.rotation.y = t * 1.3;
+    }
+    if (glowMat.current) glowMat.current.opacity = 0.14 + (f - 0.85) * 0.2;
+  });
+
+  return (
+    <group position={[0, topY, 0]}>
+      <ContactShadow y={0.012} radius={0.58} />
+      <mesh geometry={CONCLAVE_GEOMETRY} material={TILE_MATERIAL} />
+      {/* the eternal brazier flame */}
+      <mesh ref={flame} position={[0, 0.26, 0]}>
+        <coneGeometry args={[0.05, 0.15, 5]} />
+        <meshStandardMaterial color="#ffcf7a" emissive="#ff6a12" emissiveIntensity={2.6} flatShading roughness={0.4} />
+      </mesh>
+      <mesh position={[0, 0.3, 0]}>
+        <sphereGeometry args={[0.17, 8, 6]} />
+        <meshBasicMaterial
+          ref={glowMat}
+          color="#ffb057"
+          transparent
+          opacity={0.16}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
     </group>
   );
 }
@@ -705,14 +822,16 @@ interface HexTileMeshProps {
   hex: HexTile;
   isSelected: boolean;
   isPlayerHere: boolean;
+  isConclave: boolean;
   settlement?: Settlement;
   onSelect: (id: string) => void;
 }
 
-function HexTileMesh({ hex, isSelected, isPlayerHere, settlement, onSelect }: HexTileMeshProps) {
+function HexTileMesh({ hex, isSelected, isPlayerHere, isConclave, settlement, onSelect }: HexTileMeshProps) {
   const { x, y } = hexToPixel(hex.q, hex.r);
   const discovered = hex.discovered;
   const isWater = hex.terrain === 'water';
+  const [hovered, setHovered] = useState(false);
 
   const style = discovered ? TERRAIN_STYLE[hex.terrain] : UNDISCOVERED_STYLE;
   const columnH = discovered && !isWater
@@ -722,7 +841,16 @@ function HexTileMesh({ hex, isSelected, isPlayerHere, settlement, onSelect }: He
   const topY = discovered && isWater ? WATER_SURFACE_Y : columnH;
 
   const geometry = useMemo(
-    () => buildHexColumn(HEX_RADIUS, columnH, style.top, style.side, mulberry32(hashString(hex.id))),
+    () =>
+      beveledColumn(
+        HEX_RADIUS,
+        columnH,
+        6,
+        Math.PI / 6, // pointy-top
+        style.top,
+        style.side,
+        mulberry32(hashString(hex.id)),
+      ),
     [hex.id, columnH, style],
   );
 
@@ -764,31 +892,8 @@ function HexTileMesh({ hex, isSelected, isPlayerHere, settlement, onSelect }: He
 // Sky dome — vertex-color gradient, unaffected by fog
 // ---------------------------------------------------------------------------
 
-function makeSkyGeometry(): THREE.BufferGeometry {
-  const geom = new THREE.SphereGeometry(55, 24, 16);
-  const pos = geom.attributes.position;
-  const colors = new Float32Array(pos.count * 3);
-  const zenith = new THREE.Color(SKY_ZENITH);
-  const horizon = new THREE.Color(SKY_HORIZON);
-  const below = new THREE.Color(SKY_BELOW);
-  const c = new THREE.Color();
-  for (let i = 0; i < pos.count; i++) {
-    const t = pos.getY(i) / 55; // -1..1
-    if (t < 0) {
-      c.copy(horizon).lerp(below, Math.min(1, -t * 2));
-    } else {
-      c.copy(horizon).lerp(zenith, Math.pow(t, 0.65));
-    }
-    colors[i * 3] = c.r;
-    colors[i * 3 + 1] = c.g;
-    colors[i * 3 + 2] = c.b;
-  }
-  geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  return geom;
-}
-
 function SkyDome() {
-  const geometry = useMemo(makeSkyGeometry, []);
+  const geometry = useMemo(() => makeSkyGeometry(55, SKY_BELOW, SKY_HORIZON, SKY_ZENITH), []);
   return (
     <mesh geometry={geometry}>
       <meshBasicMaterial vertexColors side={THREE.BackSide} fog={false} depthWrite={false} />
@@ -822,15 +927,15 @@ function SceneContents() {
   return (
     <>
       {/* Warm key light from upper-left */}
-      <directionalLight position={[-8, 13, 6]} intensity={1.45} color="#ffd3a1" />
+      <directionalLight position={[-8, 13, 6]} intensity={1.6} color="#ffe3bb" />
       {/* Cool rim fill from the opposite side */}
-      <directionalLight position={[7, 6, -9]} intensity={0.3} color="#8fb8d8" />
-      {/* Cool teal bounce from below via hemisphere ground color */}
-      <hemisphereLight args={['#c9d6f2', '#27585e', 0.5]} />
-      <ambientLight intensity={0.32} color="#b8c4e6" />
+      <directionalLight position={[7, 6, -9]} intensity={0.42} color="#c3d8f2" />
+      {/* Sunlit sky above, warm earth bounce below */}
+      <hemisphereLight args={['#ffeed4', '#7d8a6a', 0.8]} />
+      <ambientLight intensity={0.46} color="#e6dcf0" />
 
-      {/* Atmospheric depth fade into the dusk horizon */}
-      <fog attach="fog" args={[FOG_COLOR, 15, 36]} />
+      {/* Atmospheric depth fade into the morning haze */}
+      <fog attach="fog" args={[FOG_COLOR, 16, 40]} />
 
       <SkyDome />
 

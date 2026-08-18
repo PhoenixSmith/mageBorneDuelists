@@ -204,7 +204,7 @@ export function ShopPanel() {
 
           return (
             <div key={cat}>
-              <h3 className="chapter text-2xs mb-2 text-parchment-100">{meta.label}</h3>
+              <h3 className="chapter text-2xs mb-2">{meta.label}</h3>
               <div className="page overflow-hidden py-0 px-0">
                 {items.map((item) => {
                   const supply = market.supplies[item.id] ?? 0;

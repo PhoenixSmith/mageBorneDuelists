@@ -130,8 +130,8 @@ export function DeckPanel() {
         )}
 
         {/* --- Grimoire ------------------------------------------------------ */}
-        <h3 className="chapter text-sm pt-1 text-parchment-200">
-          <span className="text-parchment-100">Grimoire · {player.grimoire.length} spells</span>
+        <h3 className="chapter text-sm pt-1">
+          <span>Grimoire · {player.grimoire.length} spells</span>
         </h3>
 
         <div className="space-y-2">

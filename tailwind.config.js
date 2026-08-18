@@ -49,7 +49,16 @@ export default {
           400: '#e7d089',
           300: '#f0e2b4',
         },
-        // --- Night: the dark oak table the almanac rests on ------------------
+        // --- Linen: the sunlit table the almanac rests on --------------------
+        linen: {
+          50: '#f7f1e2',
+          100: '#ece1c8',
+          200: '#e4d5b0',
+          300: '#d9c69c',
+          400: '#c9b285',
+          500: '#b39b6d',
+        },
+        // --- Night: deep shadow lines, seams and recesses --------------------
         night: {
           900: '#120d09',
           800: '#1a1410',

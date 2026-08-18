@@ -26,8 +26,8 @@ function Tally({
 }) {
   return (
     <div
-      className="flex items-center gap-1.5 pl-0.5 pr-2 py-0.5 rounded-seal border border-wood-900/70 bg-wood-900/50"
-      style={{ boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)' }}
+      className="flex items-center gap-1.5 pl-0.5 pr-2 py-0.5 rounded-seal border border-wood-900/70 bg-wood-900/55"
+      style={{ boxShadow: 'inset 0 1px 3px rgba(30,18,8,0.55)' }}
       title={title}
     >
       <Seal glyph={glyph} tone={tone} size="sm" />
@@ -43,7 +43,7 @@ export function TopBar() {
   const daysLeft = world.maxDays - world.day;
 
   return (
-    <div className="wood flex items-center justify-between gap-2 px-2.5 py-1.5 border-b-2 border-night-900 shadow-carved z-10">
+    <div className="wood flex items-center justify-between gap-2 px-2.5 py-1.5 border-b-2 border-wood-900 shadow-carved z-10">
       <div className="flex items-center gap-1.5">
         <Tally glyph="coin" tone="brass" value={world.player.coin} title="Coin" />
         <Tally
@@ -71,7 +71,7 @@ export function BottomNav() {
   const setActivePanel = useGameStore((s) => s.setActivePanel);
 
   return (
-    <nav className="wood flex items-stretch border-t-2 border-night-900 h-16 shadow-carved z-10">
+    <nav className="wood flex items-stretch border-t-2 border-wood-900 h-16 shadow-carved z-10">
       {NAV_ITEMS.map((item) => {
         const active = activePanel === item.id;
         return (
@@ -82,22 +82,20 @@ export function BottomNav() {
             className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1 rounded-md my-1 mx-0.5 transition-all duration-100 ${
               active
                 ? 'tab-inlay text-ink-900'
-                : 'text-parchment-300/85 hover:text-parchment-100 hover:bg-wood-900/40'
+                : 'text-parchment-200 hover:text-parchment-50 hover:bg-wood-900/40'
             }`}
           >
             <span
               className={`inline-flex items-center justify-center w-7 h-7 rounded-seal border ${
                 active
                   ? 'border-brass-900/70 bg-brass-800/25'
-                  : 'border-parchment-300/25 bg-night-900/30'
+                  : 'border-parchment-200/35 bg-wood-900/35'
               }`}
             >
               <Glyph name={item.icon} className="w-[17px] h-[17px]" strokeWidth={1.9} />
             </span>
             <span
-              className={`text-2xs font-display font-bold leading-none tracking-tight max-w-full truncate px-0.5 ${
-                active ? '' : 'opacity-90'
-              }`}
+              className="text-2xs font-display font-bold leading-none tracking-tight max-w-full truncate px-0.5"
             >
               {item.label}
             </span>

@@ -246,7 +246,7 @@ export function QuestsPanel() {
         {/* --- Available ----------------------------------------------------- */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <h3 className="chapter text-2xs flex-1 text-parchment-100">Available</h3>
+            <h3 className="chapter text-2xs flex-1">Available</h3>
             {settlement && (
               <button
                 onClick={() => generateSettlementQuests(settlement.id)}
@@ -285,7 +285,7 @@ export function QuestsPanel() {
 
         {/* --- Active -------------------------------------------------------- */}
         <div>
-          <h3 className="chapter text-2xs mb-2 text-parchment-100">
+          <h3 className="chapter text-2xs mb-2">
             Undertaken · {activeQuests.length}
           </h3>
           {activeQuests.length === 0 ? (
@@ -310,7 +310,7 @@ export function QuestsPanel() {
         {/* --- Detail --------------------------------------------------------- */}
         {selectedQuest && (
           <div>
-            <h3 className="chapter text-2xs mb-2 text-parchment-100">The Writ</h3>
+            <h3 className="chapter text-2xs mb-2">The Writ</h3>
             <QuestDetail
               quest={selectedQuest}
               onComplete={selectedQuest.currentStage >= selectedQuest.stages.length - 1
@@ -324,7 +324,7 @@ export function QuestsPanel() {
         {/* --- Completed ------------------------------------------------------- */}
         {completed.length > 0 && (
           <div>
-            <h3 className="chapter text-2xs mb-2 text-parchment-100">
+            <h3 className="chapter text-2xs mb-2">
               Discharged · {completed.length}
             </h3>
             <div className="slip px-2.5 py-2 text-2xs text-ink-600 italic">

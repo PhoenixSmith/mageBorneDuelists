@@ -14,7 +14,8 @@ export type GlyphName =
   | 'flame' | 'droplet' | 'gust' | 'mountain' | 'bolt' | 'vapor'
   | 'chain' | 'eye' | 'hush' | 'spiral'
   | 'bed' | 'book' | 'anvil' | 'flask' | 'rune'
-  | 'compass' | 'check' | 'quill' | 'clock';
+  | 'compass' | 'check' | 'quill' | 'clock'
+  | 'shield' | 'heart' | 'ledger' | 'cross';
 
 const PATHS: Record<GlyphName, ReactNode> = {
   // --- resources -----------------------------------------------------------
@@ -219,6 +220,22 @@ const PATHS: Record<GlyphName, ReactNode> = {
       <path d="M12 7v5.4l3.4 2" />
     </>
   ),
+  shield: (
+    <>
+      <path d="M12 3.2 19.4 6v6c0 4.2-3 7.2-7.4 8.8C7.6 19.2 4.6 16.2 4.6 12V6z" />
+      <path d="M12 7.4v8.4" />
+    </>
+  ),
+  heart: (
+    <path d="M12 20.2C6.6 16.6 3.6 13.6 3.6 10.2a4.2 4.2 0 0 1 8.4-1.4 4.2 4.2 0 0 1 8.4 1.4c0 3.4-3 6.4-8.4 10z" />
+  ),
+  ledger: (
+    <>
+      <rect x="4.4" y="3.6" width="15.2" height="16.8" rx="2" />
+      <path d="M8.4 3.6v16.8M11.6 8h5M11.6 12h5M11.6 16h5" />
+    </>
+  ),
+  cross: <path d="M6 6l12 12M18 6 6 18" />,
 };
 
 export function Glyph({

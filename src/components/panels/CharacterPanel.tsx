@@ -62,7 +62,7 @@ export function CharacterPanel() {
             className="w-20 h-24 shrink-0 rounded-lg border-2 border-brass-800 brass-plate p-1"
             style={{ boxShadow: 'inset 0 0 0 1px rgba(28,20,14,0.35), 0 3px 8px -3px rgba(0,0,0,0.7)' }}
           >
-            <div className="w-full h-full rounded border border-ink-900/40 bg-night-800/80 flex items-center justify-center">
+            <div className="w-full h-full rounded border border-ink-900/40 bg-wood-800/85 flex items-center justify-center">
               <Glyph name="hat" className="w-10 h-10 text-brass-400" strokeWidth={1.5} />
             </div>
           </div>

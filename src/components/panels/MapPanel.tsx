@@ -51,10 +51,10 @@ export function MapPanel() {
   const canTravel = selectedHex && !isCurrentLocation && selectedHex.discovered && distance > 0;
 
   return (
-    <div className="flex flex-col h-full bg-night-800">
-      {/* The scrying window — 3D hex map behind an ornate brass-and-walnut frame */}
+    <div className="tabletop flex flex-col h-full">
+      {/* The scrying window — 3D hex map behind an ornate brass-and-oak frame */}
       <div
-        className="flex-1 relative overflow-hidden scrying-frame m-1.5 rounded-lg bg-night-900"
+        className="flex-1 relative overflow-hidden scrying-frame m-1.5 rounded-lg bg-linen-300"
         style={{ touchAction: 'none' }}
       >
         <HexMapScene />

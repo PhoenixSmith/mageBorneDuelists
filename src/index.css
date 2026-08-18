@@ -4,8 +4,9 @@
 
 /* ==========================================================================
    MageBorne Duelists — "Enchanted Almanac" visual system
-   Parchment pages on a dark oak table: ink text, wood chrome, brass accents,
-   wax seals. All texture is CSS gradients — no image assets, no web fonts.
+   Parchment pages on a sunlit linen table: ink text, oak chrome, brass
+   accents, wax seals. All texture is CSS gradients — no image assets, no
+   web fonts.
    ========================================================================== */
 
 @layer base {
@@ -27,7 +28,7 @@
   body {
     font-family: theme('fontFamily.body');
     color: theme('colors.ink.800');
-    background-color: theme('colors.night.800');
+    background-color: theme('colors.linen.200');
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
@@ -104,14 +105,26 @@
       repeating-linear-gradient(11deg, rgba(122, 92, 46, 0.035) 0 1px, transparent 1px 8px);
   }
 
-  /* Stained walnut, planked with the grain */
+  /* Waxed oak, planked with the grain — chrome, lit from above */
   .wood {
-    background-color: theme('colors.wood.700');
+    background-color: theme('colors.wood.600');
     background-image:
-      repeating-linear-gradient(88deg, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 7px),
-      repeating-linear-gradient(91deg, rgba(255, 214, 160, 0.05) 0 1px, transparent 1px 15px),
-      radial-gradient(ellipse 60% 120% at 12% 50%, rgba(255, 206, 150, 0.09), transparent 70%),
-      linear-gradient(180deg, #7d5a3a 0%, #5a3d26 55%, #35220f 100%);
+      repeating-linear-gradient(88deg, rgba(58, 34, 14, 0.22) 0 1px, transparent 1px 6px),
+      repeating-linear-gradient(91deg, rgba(255, 224, 176, 0.11) 0 1px, transparent 1px 13px),
+      radial-gradient(ellipse 70% 130% at 14% 45%, rgba(255, 214, 160, 0.16), transparent 72%),
+      linear-gradient(180deg, #a3784d 0%, #7f5836 52%, #513520 100%);
+  }
+
+  /* The table itself: aged linen, sunlit, with the same paper fibre.
+     .panel-scroll is the same surface, so both share one definition. */
+  .tabletop,
+  .panel-scroll {
+    background-color: theme('colors.linen.200');
+    background-image:
+      radial-gradient(ellipse 95% 55% at 50% -10%, rgba(255, 250, 233, 0.85), transparent 68%),
+      radial-gradient(ellipse 70% 55% at 90% 100%, rgba(140, 106, 58, 0.16), transparent 64%),
+      repeating-linear-gradient(101deg, rgba(122, 92, 46, 0.05) 0 1px, transparent 1px 7px),
+      repeating-linear-gradient(9deg, rgba(122, 92, 46, 0.04) 0 1px, transparent 1px 10px);
   }
 
   /* Oxblood leather, pebbled */
@@ -170,11 +183,11 @@
   /* Ornate scrying window for the 3D canvas */
   .scrying-frame {
     position: relative;
-    border: 3px solid theme('colors.wood.800');
+    border: 3px solid theme('colors.wood.700');
     box-shadow:
-      inset 0 0 0 2px rgba(201, 162, 39, 0.5),
-      inset 0 0 30px 6px rgba(0, 0, 0, 0.6),
-      0 4px 14px -6px rgba(0, 0, 0, 0.9);
+      inset 0 0 0 2px rgba(201, 162, 39, 0.55),
+      inset 0 0 26px 4px rgba(74, 50, 26, 0.3),
+      0 4px 14px -7px rgba(58, 37, 23, 0.75);
   }
   .scrying-frame::before,
   .scrying-frame::after {
@@ -457,18 +470,154 @@
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45), inset 0 -1px 0 rgba(255, 245, 205, 0.5);
   }
 
-  /* Panel scroll container — the page sits on the dark table */
+  /* Panel scroll container — the page sits on the sunlit table */
   .panel-scroll {
     @apply h-full overflow-y-auto;
-    background-color: theme('colors.night.800');
-    background-image:
-      radial-gradient(ellipse 90% 60% at 50% -10%, rgba(120, 84, 45, 0.35), transparent 70%),
-      repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 9px);
   }
 
   /* Empty-state / hint copy */
   .marginalia {
     @apply font-display italic text-ink-600;
+  }
+
+  /* ==================================================== THE DUELLING GROUND
+     Readouts pinned over the 3D stage: small parchment chips, a move menu of
+     card slips, and the pressed-plate frame the scene sits in.
+     ------------------------------------------------------------------------ */
+
+  /* A chip of parchment laid on the scene — must stay legible over anything */
+  .hud-chip {
+    @apply paper rounded-lg border-2 border-ink-700;
+    box-shadow: 0 2px 7px -2px rgba(40, 26, 12, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+
+  /* Meter struck across with notches, so a glance reads the count */
+  .meter-notched {
+    position: relative;
+  }
+  .meter-notched::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(
+      90deg,
+      transparent 0 8px,
+      rgba(43, 32, 26, 0.5) 8px 9px
+    );
+  }
+
+  /* The stage, pressed into the page like a plate in a book */
+  .arena-frame {
+    box-shadow:
+      inset 0 0 0 2px rgba(90, 70, 52, 0.6),
+      inset 0 0 0 5px rgba(201, 162, 39, 0.22),
+      inset 0 70px 70px -66px rgba(58, 37, 23, 0.8),
+      inset 0 -90px 90px -72px rgba(58, 37, 23, 0.7);
+  }
+
+  /* Move menu: one card of the hand, tappable */
+  .rail-card {
+    @apply paper relative flex flex-col items-start justify-center gap-0.5 rounded-lg border-2
+           px-1.5 py-1 select-none cursor-pointer transition-all duration-100;
+    width: 108px;
+    min-height: 52px;
+    border-color: var(--el-deep);
+    background-image: linear-gradient(180deg, var(--el-wash) 0%, rgba(255, 255, 255, 0) 58%),
+      radial-gradient(ellipse 80% 60% at 18% 12%, rgba(255, 253, 244, 0.65), transparent 60%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 2px 6px -2px rgba(40, 26, 12, 0.6);
+  }
+  .rail-card-on {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), theme('boxShadow.gilt');
+  }
+  .rail-card-focus {
+    transform: translateY(-3px);
+  }
+  .rail-scroll {
+    scroll-snap-type: x proximity;
+  }
+  .rail-scroll > * {
+    scroll-snap-align: center;
+  }
+
+  /* Full card detail, opened upward from the rail */
+  .sheet-card {
+    max-height: 42vh;
+    overflow-y: auto;
+    animation: sheet-rise 170ms ease-out;
+    box-shadow: 0 -7px 20px -9px rgba(40, 26, 12, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+
+  /* Damage struck over a combatant — an inked wound chip, legible on sky */
+  .dmg-float {
+    @apply paper rounded-md border-2 border-oxblood-800 text-oxblood-800;
+    position: absolute;
+    z-index: 15;
+    padding: 1px 7px;
+    font-size: 1.15rem;
+    line-height: 1.25;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+    box-shadow: 0 2px 7px -2px rgba(40, 26, 12, 0.7);
+    /* held back so the number lands with the spell, not with the tap */
+    animation: dmg-rise 1.4s ease-out 0.55s both;
+  }
+
+  .banner-pop {
+    animation: banner-pop 260ms cubic-bezier(0.2, 1.4, 0.4, 1);
+  }
+}
+
+/* ------------------------------------------------------------- KEYFRAMES
+   Outside the layers so the at-rules survive Tailwind's layer handling.
+   ------------------------------------------------------------------------ */
+@keyframes sheet-rise {
+  from {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes dmg-rise {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 12px) scale(0.7);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(-50%, -6px) scale(1.16);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(-50%, -32px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -56px) scale(0.95);
+  }
+}
+
+@keyframes banner-pop {
+  from {
+    transform: scale(0.86);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-card,
+  .banner-pop {
+    animation: none;
+  }
+  .dmg-float {
+    animation: dmg-rise 1.4s linear 0.55s both;
   }
 }
 
