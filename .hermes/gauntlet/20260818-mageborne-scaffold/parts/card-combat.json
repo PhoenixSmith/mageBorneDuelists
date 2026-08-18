@@ -1,0 +1,32 @@
+{
+  "partId": "card-combat",
+  "status": "pending",
+  "round": 0,
+  "reference": {"type": "file", "uri": "DESIGN.md", "verifiedAccessible": true},
+  "criteria": [
+    "Spell card type system with Cast, Maneuver, Empower, Burn icon fields",
+    "Spell catalog: 8 per element × 4 elements + 4 hybrids = 36 spells minimum",
+    "Combat engine: round structure (intent reveal, prepare, reveal casts, reactions, resolve, aftermath)",
+    "Speed-based resolution on casting timeline",
+    "Condition system: Burn, Soaked, Bound, Exposed with proper trigger/expire logic",
+    "Range bands: Engaged, Near, Far with movement mechanics",
+    "Monster behavior decks: 3 monsters × 5 cards each",
+    "Two-card commitment: choose 2 cards, Cast from one, Maneuver from other",
+    "Fatigue system: reshuffle adds Fatigue cards",
+    "Mana: attunement (1 per mastery rank per encounter) + card channeling + terrain/equipment",
+    "Combat UI: hand display, enemy intent, card selection, timeline, vitality/focus/guard display",
+    "Engine unit tests: damage, conditions, speed resolution, fatigue, mana",
+    "Browser smoke: play card → damage applied → enemy turn → next round starts"
+  ],
+  "verificationCommands": [
+    "npx tsc --noEmit",
+    "npm run build",
+    "node --experimental-strip-types --test src/game/engine/*.test.ts"
+  ],
+  "worker": null,
+  "artifactManifest": [],
+  "deterministicResults": [],
+  "verdictHistory": [],
+  "bestRound": null,
+  "plateauCount": 0
+}

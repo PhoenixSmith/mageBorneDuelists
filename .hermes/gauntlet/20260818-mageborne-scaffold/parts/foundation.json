@@ -1,0 +1,27 @@
+{
+  "partId": "foundation",
+  "status": "pending",
+  "round": 0,
+  "reference": {"type": "file", "uri": "DESIGN.md", "verifiedAccessible": true},
+  "criteria": [
+    "Vite react-ts project scaffolded with all deps installed",
+    "Folder structure matches DESIGN.md section 26",
+    "Types defined: Element, SpellCard, Mage, CombatState, HexTile, WorldState, Condition",
+    "Zustand store with world state skeleton and basic actions",
+    "Mobile-first UI shell: top bar, bottom nav, chronicle log",
+    "tsc --noEmit passes with zero errors",
+    "npm run build passes",
+    "Dev server serves the app"
+  ],
+  "verificationCommands": [
+    "npx tsc --noEmit",
+    "npm run build",
+    "curl -s http://localhost:5173 | head -20"
+  ],
+  "worker": null,
+  "artifactManifest": [],
+  "deterministicResults": [],
+  "verdictHistory": [],
+  "bestRound": null,
+  "plateauCount": 0
+}

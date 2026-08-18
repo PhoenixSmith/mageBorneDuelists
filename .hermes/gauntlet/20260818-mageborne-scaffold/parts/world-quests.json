@@ -1,0 +1,27 @@
+{
+  "partId": "world-quests",
+  "status": "pending",
+  "round": 0,
+  "reference": {"type": "file", "uri": "DESIGN.md", "verifiedAccessible": true},
+  "criteria": [
+    "Location decks: each region type spawns contextual situations",
+    "Quest system: short jobs, quest chains, personal trials with branching resolutions",
+    "Economy: coin, reagents, focus as world resources with earn/spend mechanics",
+    "Markets: supply/demand per city with price collapse on oversell",
+    "Travel system: move between hexes, spend days, encounter checks",
+    "Mage progression: elemental mastery deeds, reputation tracks, titles",
+    "Deck management: grimoire vs prepared deck, swap at inns/colleges",
+    "Time system: 12-week calendar, actions cost days",
+    "Browser smoke: travel → encounter → combat → reward → shop → deck swap"
+  ],
+  "verificationCommands": [
+    "npx tsc --noEmit",
+    "npm run build"
+  ],
+  "worker": null,
+  "artifactManifest": [],
+  "deterministicResults": [],
+  "verdictHistory": [],
+  "bestRound": null,
+  "plateauCount": 0
+}

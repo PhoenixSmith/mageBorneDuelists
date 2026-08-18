@@ -1,0 +1,29 @@
+{
+  "partId": "hex-map",
+  "status": "pending",
+  "round": 0,
+  "reference": {"type": "file", "uri": "DESIGN.md", "verifiedAccessible": true},
+  "criteria": [
+    "Seeded RNG (mulberry32) for reproducible worlds",
+    "Value-noise elevation + moisture maps for terrain assignment",
+    "Hex math: axial coordinates, pixel-to-hex conversion, neighbor calculation",
+    "Scatter settlements (towns, colleges, nexuses, ruins) with min-distance constraint",
+    "R3F scene: flat-shaded low-poly hex tiles with terrain-appropriate colors",
+    "Camera controls: orbit/pan/zoom",
+    "DOM overlay: settlement list with distance, type, faction",
+    "Fog of war: undiscovered hexes hidden or rendered differently",
+    "Click hex to select, info panel shows terrain type and any settlement",
+    "npm run build passes",
+    "Browser: hex mesh count > 0, settlement list populated, click selects hex"
+  ],
+  "verificationCommands": [
+    "npx tsc --noEmit",
+    "npm run build"
+  ],
+  "worker": null,
+  "artifactManifest": [],
+  "deterministicResults": [],
+  "verdictHistory": [],
+  "bestRound": null,
+  "plateauCount": 0
+}

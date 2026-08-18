@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260818-mageborne-scaffold",
+  "objective": "Scaffold and build the first playable vertical slice of MageBorne Duelists: a competitive open-world wizard apprenticeship game with hex map, card-driven combat, and Earthborne Rangers-inspired low-poly visuals.",
+  "status": "active",
+  "createdAt": "2026-08-18T00:00:00Z",
+  "maxRoundsPerPart": 5,
+  "boundaries": {
+    "forbidden": ["deploys", "billing", "credentials", "prod data", "messaging", "destructive git"],
+    "time": null,
+    "cost": null
+  },
+  "parts": [
+    "foundation",
+    "hex-map",
+    "card-combat",
+    "world-quests"
+  ],
+  "integrationStatus": "pending"
+}
