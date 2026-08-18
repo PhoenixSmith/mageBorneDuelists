@@ -1,5 +1,6 @@
 import { useGameStore } from '../../store/gameStore';
 import { hexDistance } from '../../game/worldgen/worldgen';
+import { HexMapScene } from '../three/HexMapScene';
 
 const TERRAIN_COLORS: Record<string, string> = {
   plains: '#7cb342',
@@ -19,7 +20,6 @@ export function MapPanel() {
   const selectedHexId = useGameStore((s) => s.selectedHexId);
   const selectHex = useGameStore((s) => s.selectHex);
 
-  const hexes = Object.values(world.hexes);
   const playerHex = world.hexes[world.playerHexId];
 
   const settlements = Object.values(world.settlements).map((s) => {
@@ -29,54 +29,12 @@ export function MapPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Hex grid SVG */}
-      <div className="flex-1 overflow-auto bg-slate-950">
-        <svg
-          width="100%"
-          height="100%"
-          viewBox="-50 -50 100 100"
-          style={{ touchAction: 'none' }}
-        >
-          {hexes.map((hex) => {
-            const x = Math.sqrt(3) * (hex.q + hex.r / 2);
-            const y = 1.5 * hex.r;
-            const isDiscovered = hex.discovered;
-            const isSelected = selectedHexId === hex.id;
-            const isPlayerHere = world.playerHexId === hex.id;
-            const color = isDiscovered ? (TERRAIN_COLORS[hex.terrain] ?? '#333') : '#1a1a2e';
-            const points = hexPoints(x, y, 0.9);
-
-            return (
-              <g key={hex.id}>
-                <polygon
-                  points={points}
-                  fill={color}
-                  stroke={isSelected ? '#fbbf24' : '#334155'}
-                  strokeWidth={isSelected ? 0.15 : 0.05}
-                  onClick={() => selectHex(hex.id)}
-                  className="cursor-pointer"
-                />
-                {isPlayerHere && (
-                  <circle cx={x} cy={y} r={0.3} fill="#fbbf24" stroke="#000" strokeWidth={0.05} />
-                )}
-                {hex.settlementId && isDiscovered && (
-                  <rect
-                    x={x - 0.15}
-                    y={y - 0.15}
-                    width={0.3}
-                    height={0.3}
-                    fill="#fff"
-                    stroke="#000"
-                    strokeWidth={0.03}
-                  />
-                )}
-              </g>
-            );
-          })}
-        </svg>
+      {/* 3D hex map (React Three Fiber) */}
+      <div className="flex-1 relative bg-slate-950 overflow-hidden" style={{ touchAction: 'none' }}>
+        <HexMapScene />
       </div>
 
-      {/* Settlement list / hex info */}
+      {/* Settlement list / hex info — DOM overlay for mobile interaction reliability */}
       <div className="bg-slate-800 border-t border-slate-700 max-h-48 overflow-y-auto">
         {selectedHexId && world.hexes[selectedHexId] && (
           <div className="p-2 text-sm text-slate-200">
@@ -131,11 +89,5 @@ export function MapPanel() {
   );
 }
 
-function hexPoints(cx: number, cy: number, size: number): string {
-  const points: string[] = [];
-  for (let i = 0; i < 6; i++) {
-    const angle = (Math.PI / 3) * i + Math.PI / 6;
-    points.push(`${cx + size * Math.cos(angle)},${cy + size * Math.sin(angle)}`);
-  }
-  return points.join(' ');
-}
+// Re-export terrain colors for potential use elsewhere
+export { TERRAIN_COLORS };
