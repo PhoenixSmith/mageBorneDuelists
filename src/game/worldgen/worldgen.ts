@@ -245,6 +245,7 @@ export function generateWorld(seed: number): WorldState {
     player,
     rivals: [],
     activeQuests: [],
+    availableQuests: [],
     completedQuests: [],
     chronicle: [{
       day: 1,

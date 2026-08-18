@@ -293,6 +293,7 @@ export interface WorldState {
   player: Mage;
   rivals: Mage[];
   activeQuests: Quest[];
+  availableQuests: Quest[];
   completedQuests: string[];
   chronicle: ChronicleEntry[];
   currentCombat: CombatState | null;
@@ -342,6 +343,21 @@ export interface ChronicleEntry {
   day: number;
   text: string;
   type: 'travel' | 'combat' | 'quest' | 'market' | 'discovery' | 'mastery' | 'duel';
+}
+
+// --- Shop / Market Items ----------------------------------------------------
+
+export interface MarketItem {
+  id: string;
+  name: string;
+  category: 'reagent' | 'consumable' | 'scroll';
+  basePrice: number;
+  description: string;
+}
+
+export interface ShopState {
+  items: Record<string, MarketItem>;
+  settlementMarkets: Record<string, Market>;
 }
 
 // --- Store ------------------------------------------------------------------

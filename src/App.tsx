@@ -4,6 +4,7 @@ import { MapPanel } from './components/panels/MapPanel';
 import { DeckPanel } from './components/panels/DeckPanel';
 import { CombatPanel } from './components/panels/CombatPanel';
 import { QuestsPanel } from './components/panels/QuestsPanel';
+import { ShopPanel } from './components/panels/ShopPanel';
 import { CharacterPanel } from './components/panels/CharacterPanel';
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
         {activePanel === 'deck' && <DeckPanel />}
         {activePanel === 'combat' && <CombatPanel />}
         {activePanel === 'quests' && <QuestsPanel />}
+        {activePanel === 'shop' && <ShopPanel />}
         {activePanel === 'character' && <CharacterPanel />}
       </div>
       <ChronicleLog />

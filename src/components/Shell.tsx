@@ -6,6 +6,7 @@ const NAV_ITEMS: Array<{ id: PanelType; label: string; icon: string }> = [
   { id: 'deck', label: 'Deck', icon: '🃏' },
   { id: 'combat', label: 'Combat', icon: '⚔' },
   { id: 'quests', label: 'Quests', icon: '❗' },
+  { id: 'shop', label: 'Shop', icon: '🏪' },
   { id: 'character', label: 'Mage', icon: '🧙' },
 ];
 
