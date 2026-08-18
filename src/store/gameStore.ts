@@ -13,7 +13,7 @@ import {
   generateEncounter,
 } from '../game/engine/world';
 import { initCombat, resolveRound, queueSpell, generateMonsterAction } from '../game/engine/combat';
-import { initConclave, runGrandTrial, runSwissRound, runAscensionDuel } from '../game/engine/conclave';
+import { initConclave, runGrandTrial, runSwissRound, runAscensionDuel, startPlayerConclaveCombat, resolvePlayerMatchResult } from '../game/engine/conclave';
 
 const SEED = 42;
 
@@ -39,6 +39,8 @@ interface GameActions {
   resolveGrandTrial: () => void;
   resolveSwissRound: () => void;
   resolveAscensionDuel: () => void;
+  startConclaveCombat: () => void;
+  resolveConclaveCombat: () => void;
 }
 
 export type Store = GameState & GameActions;
@@ -260,7 +262,38 @@ export const useGameStore = create<Store>((set, get) => ({
       : null;
     set({
       world: { ...state.world, conclave },
-      log: [...state.log.slice(-199), winnerName ? `${winnerName} wins the Conclave!` : 'Ascension Duel complete.'],
+      log: [...state.log.slice(-199), winnerName ? `${winnerName} wins the Conclave!` : 'Ascension Duel begins.'],
+    });
+  },
+
+  startConclaveCombat: () => {
+    const state = get();
+    if (!state.world.conclave) return;
+    const combat = startPlayerConclaveCombat(state.world.conclave, state.world.player);
+    if (!combat) return;
+    set({
+      world: { ...state.world, currentCombat: combat },
+      activePanel: 'combat',
+      log: [...state.log.slice(-199), 'Conclave duel begins!'],
+    });
+  },
+
+  resolveConclaveCombat: () => {
+    const state = get();
+    if (!state.world.conclave || !state.world.currentCombat) return;
+    const combatResult = state.world.currentCombat;
+    const conclave = resolvePlayerMatchResult(state.world.conclave, combatResult);
+    const winnerName = conclave.winner
+      ? conclave.participants.find(m => m.id === conclave.winner)?.name
+      : null;
+    set({
+      world: { ...state.world, conclave, currentCombat: null },
+      activePanel: 'conclave',
+      log: [...state.log.slice(-199),
+        conclave.phase === 'complete' && winnerName
+          ? `${winnerName} wins the Conclave!`
+          : 'Match resolved. Return to the Conclave.',
+      ],
     });
   },
 }));

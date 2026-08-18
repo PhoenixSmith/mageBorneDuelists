@@ -413,4 +413,11 @@ export interface ConclaveState {
   ascensionFinalists: string[];
   winner: string | null;
   log: string[];
+  /** When the player has a match to play, this holds the opponent's mage ID.
+   *  null = no pending player match (either auto-resolved or already played). */
+  pendingPlayerMatch: string | null;
+  /** 'swiss' or 'ascension' — which phase the player's pending match belongs to. */
+  pendingMatchPhase: ConclavePhase | null;
+  /** The match ID of the player's pending match, for tracking after combat resolves. */
+  pendingMatchId: string | null;
 }

@@ -164,8 +164,10 @@ export function CombatPanel() {
   const world = useGameStore((s) => s.world);
   const setWorld = useGameStore((s) => s.setWorld);
   const addLogEntry = useGameStore((s) => s.addLogEntry);
+  const resolveConclaveCombat = useGameStore((s) => s.resolveConclaveCombat);
 
   const combat = world.currentCombat;
+  const isConclaveCombat = combat?.encounterType === 'tournament';
 
   // Local state for card selection: cardId -> use mode
   const [selectedCards, setSelectedCards] = useState<Record<string, 'cast' | 'maneuver'>>({});
@@ -245,16 +247,21 @@ export function CombatPanel() {
 
   // --- No combat state ---
   if (!combat) {
+    const hasPendingConclave = !!world.conclave?.pendingPlayerMatch;
     return (
       <div className="p-4 text-slate-200 overflow-y-auto h-full flex flex-col items-center justify-center gap-4">
         <h2 className="text-lg font-bold text-red-400">Combat</h2>
         <p className="text-slate-400 text-sm">No active combat.</p>
-        <button
-          onClick={startTestCombat}
-          className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded font-bold text-sm transition-colors"
-        >
-          ⚔ Start Test Combat
-        </button>
+        {hasPendingConclave ? (
+          <p className="text-purple-400 text-sm">Go to the Conclave tab to start your match.</p>
+        ) : (
+          <button
+            onClick={startTestCombat}
+            className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded font-bold text-sm transition-colors"
+          >
+            ⚔ Start Test Combat
+          </button>
+        )}
       </div>
     );
   }
@@ -377,12 +384,21 @@ export function CombatPanel() {
         >
           ⚔ Resolve Round
         </button>
-        <button
-          onClick={startTestCombat}
-          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded font-bold text-sm transition-colors"
-        >
-          ↻ Restart Test Combat
-        </button>
+        {isConclaveCombat && combat.result !== 'ongoing' ? (
+          <button
+            onClick={() => resolveConclaveCombat()}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded font-bold text-sm transition-colors"
+          >
+            🏆 Return to Conclave
+          </button>
+        ) : (
+          <button
+            onClick={startTestCombat}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded font-bold text-sm transition-colors"
+          >
+            ↻ Restart Test Combat
+          </button>
+        )}
       </div>
 
       {/* Combat Log */}

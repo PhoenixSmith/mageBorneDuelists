@@ -2,6 +2,13 @@
 // MageBorne Duelists — Conclave Tournament Engine
 // ============================================================================
 // Three-act endgame: Grand Trial → Swiss Rounds → Ascension Duel
+//
+// Player matches are NOT auto-resolved. When the player has a match:
+//   1. AI vs AI matches in the same round are auto-resolved
+//   2. The player's match is set as pendingPlayerMatch
+//   3. The store hands off to the combat panel for live play
+//   4. When combat resolves, resolvePlayerMatchResult() feeds the result back
+//
 // Pure functions: take state, return new state.
 // ============================================================================
 
@@ -36,9 +43,10 @@ function getPersonality(mageId: string): MagePersonality {
   return rival?.personality ?? 'adaptive';
 }
 
-/**
- * Initialize the Conclave with the player and all rival mages.
- */
+// ---------------------------------------------------------------------------
+// Initialization
+// ---------------------------------------------------------------------------
+
 export function initConclave(player: Mage): ConclaveState {
   const participants = [player, ...RIVALS.map(r => r.mage)];
 
@@ -62,14 +70,16 @@ export function initConclave(player: Mage): ConclaveState {
     ascensionFinalists: [],
     winner: null,
     log: ['The Conclave begins. Mages from across the land gather for the final trial.'],
+    pendingPlayerMatch: null,
+    pendingMatchPhase: null,
+    pendingMatchId: null,
   };
 }
 
-/**
- * Run the Grand Trial: all mages face a simultaneous elemental challenge.
- * Score based on elemental mastery, vitality, and randomness.
- * Determines seeding for Swiss rounds.
- */
+// ---------------------------------------------------------------------------
+// Act I: Grand Trial
+// ---------------------------------------------------------------------------
+
 export function runGrandTrial(state: ConclaveState): ConclaveState {
   const log = [...state.log, '=== Act I: The Grand Trial ===', 'All mages face an elemental breach. They must contain it.'];
 
@@ -77,7 +87,6 @@ export function runGrandTrial(state: ConclaveState): ConclaveState {
     const mage = state.participants.find(m => m.id === s.mageId);
     if (!mage) return s;
 
-    // Score: sum of mastery ranks × 10 + vitality + random
     const masterySum = (mage.mastery.fire + mage.mastery.water + mage.mastery.wind + mage.mastery.earth);
     const equipmentBonus = mage.equipment.trinkets.length * 2;
     const score = masterySum * 10 + mage.vitality + equipmentBonus + Math.floor(Math.random() * 20);
@@ -85,7 +94,6 @@ export function runGrandTrial(state: ConclaveState): ConclaveState {
     return { ...s, grandTrialScore: score };
   });
 
-  // Sort by grand trial score for seeding
   standings.sort((a, b) => b.grandTrialScore - a.grandTrialScore);
 
   log.push(`Grand Trial results:`);
@@ -93,7 +101,6 @@ export function runGrandTrial(state: ConclaveState): ConclaveState {
     log.push(`  ${i + 1}. ${s.name} — ${s.grandTrialScore} points`);
   });
 
-  // Top seed gets bonus points
   if (standings.length > 0) standings[0].points += 2;
   if (standings.length > 1) standings[1].points += 1;
 
@@ -105,19 +112,28 @@ export function runGrandTrial(state: ConclaveState): ConclaveState {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Act II: Swiss Rounds
+// ---------------------------------------------------------------------------
+
 /**
- * Run a single Swiss round. Pair by standings, run AI vs AI matches.
- * If the player is in the Conclave, their match is simulated too (auto-resolved).
+ * Run a Swiss round. Auto-resolves AI vs AI matches.
+ * If the player is in a match, sets pendingPlayerMatch and returns —
+ * the store should hand off to the combat panel.
  */
 export function runSwissRound(state: ConclaveState): ConclaveState {
   if (state.currentSwissRound >= state.maxSwissRounds) {
     return advanceToAscension(state);
   }
 
+  // If we have a pending player match, don't start a new round
+  if (state.pendingPlayerMatch) {
+    return state;
+  }
+
   const round = state.currentSwissRound + 1;
   const log = [...state.log, ``, `--- Swiss Round ${round} ---`];
 
-  // Pair by standings (top vs bottom)
   const activeStandings = state.standings.filter(s => !s.eliminated);
   const sorted = [...activeStandings].sort((a, b) => b.points - a.points);
 
@@ -125,7 +141,6 @@ export function runSwissRound(state: ConclaveState): ConclaveState {
   for (let i = 0; i < sorted.length - 1; i += 2) {
     pairs.push([sorted[i].mageId, sorted[i + 1].mageId]);
   }
-  // Odd one out gets a bye
   if (sorted.length % 2 === 1) {
     const bye = sorted[sorted.length - 1];
     log.push(`${bye.name} receives a bye.`);
@@ -134,138 +149,256 @@ export function runSwissRound(state: ConclaveState): ConclaveState {
 
   const newMatches: ConclaveMatch[] = [];
   const updatedStandings = [...state.standings];
+  let playerOpponentId: string | null = null;
+  let playerMatchId: string | null = null;
 
   for (const [id1, id2] of pairs) {
     const mage1 = state.participants.find(m => m.id === id1)!;
     const mage2 = state.participants.find(m => m.id === id2)!;
 
-    const result = runSwissMatch(mage1, mage2);
-    const match: ConclaveMatch = {
-      id: nextMatchId(),
-      round,
-      player1Id: id1,
-      player2Id: id2,
-      winnerId: result.winnerId,
-      log: result.log,
-      resolved: true,
-    };
-    newMatches.push(match);
+    // Check if the player is in this match
+    const playerInMatch = id1 === 'player' || id2 === 'player';
+    const opponentId = id1 === 'player' ? id2 : (id2 === 'player' ? id1 : null);
 
-    // Update standings
-    const s1 = updatedStandings.find(s => s.mageId === id1)!;
-    const s2 = updatedStandings.find(s => s.mageId === id2)!;
-    if (result.winnerId === id1) {
-      s1.wins++; s1.points += 3;
-      s2.losses++;
-      log.push(`${mage1.name} defeats ${mage2.name}.`);
+    if (playerInMatch && opponentId) {
+      // Don't auto-resolve — set as pending
+      const matchId = nextMatchId();
+      playerMatchId = matchId;
+      playerOpponentId = opponentId;
+
+      const match: ConclaveMatch = {
+        id: matchId,
+        round,
+        player1Id: id1,
+        player2Id: id2,
+        winnerId: null,
+        log: [],
+        resolved: false,
+      };
+      newMatches.push(match);
+      log.push(`Your match: ${mage1.name} vs ${mage2.name}. Prepare to duel!`);
     } else {
-      s2.wins++; s2.points += 3;
-      s1.losses++;
-      log.push(`${mage2.name} defeats ${mage1.name}.`);
+      // Auto-resolve AI vs AI
+      const result = runAIMatch(mage1, mage2, 8, 6);
+      const match: ConclaveMatch = {
+        id: nextMatchId(),
+        round,
+        player1Id: id1,
+        player2Id: id2,
+        winnerId: result.winnerId,
+        log: result.log,
+        resolved: true,
+      };
+      newMatches.push(match);
+
+      const s1 = updatedStandings.find(s => s.mageId === id1)!;
+      const s2 = updatedStandings.find(s => s.mageId === id2)!;
+      if (result.winnerId === id1) {
+        s1.wins++; s1.points += 3;
+        s2.losses++;
+        log.push(`${mage1.name} defeats ${mage2.name}.`);
+      } else {
+        s2.wins++; s2.points += 3;
+        s1.losses++;
+        log.push(`${mage2.name} defeats ${mage1.name}.`);
+      }
     }
   }
 
-  const newRound = state.currentSwissRound + 1;
-  const isLastRound = newRound >= state.maxSwissRounds;
-
   const newState: ConclaveState = {
     ...state,
-    currentSwissRound: newRound,
-    standings: updatedStandings,
     matches: [...state.matches, ...newMatches],
-    log: [...log, ...(isLastRound ? ['', 'Swiss rounds complete.'] : [])],
+    log,
+    pendingPlayerMatch: playerOpponentId,
+    pendingMatchPhase: playerOpponentId ? 'swiss' : null,
+    pendingMatchId: playerMatchId,
   };
 
-  if (isLastRound) {
-    return advanceToAscension(newState);
+  // If no player match, advance the round counter
+  if (!playerOpponentId) {
+    const newRound = newState.currentSwissRound + 1;
+    const isLastRound = newRound >= newState.maxSwissRounds;
+    newState.currentSwissRound = newRound;
+    if (isLastRound) {
+      return advanceToAscension(newState);
+    }
   }
 
   return newState;
 }
 
 /**
- * Run a compressed Swiss match between two mages.
- * Lower vitality, max 5 rounds.
+ * Create a CombatState for the player's pending Conclave match.
+ * Returns null if no pending match.
  */
-function runSwissMatch(mage1: Mage, mage2: Mage): { winnerId: string; log: string[] } {
-  const p1 = prepMageForCombat({ ...mage1, vitality: 8, maxVitality: 8 });
-  const p2 = prepMageForCombat({ ...mage2, vitality: 8, maxVitality: 8 });
+export function startPlayerConclaveCombat(state: ConclaveState, player: Mage): CombatState | null {
+  if (!state.pendingPlayerMatch) return null;
 
-  let combat = initCombat([p1, p2], 'tournament');
-  const log: string[] = [`Match: ${mage1.name} vs ${mage2.name}`];
+  const opponent = state.participants.find(m => m.id === state.pendingPlayerMatch);
+  if (!opponent) return null;
 
-  for (let round = 0; round < 6; round++) {
-    if (combat.result !== 'ongoing') break;
+  const isAscension = state.pendingMatchPhase === 'ascension';
+  const vitality = isAscension ? player.maxVitality : 8;
 
-    // AI chooses cards for both participants
-    const p1Current = combat.participants.find(p => p.id === p1.id)!;
-    const p2Current = combat.participants.find(p => p.id === p2.id)!;
+  const playerPrepped = prepMageForCombat({ ...player, vitality, maxVitality: vitality });
+  const opponentPrepped = prepMageForCombat({ ...opponent, vitality, maxVitality: vitality });
 
-    const pers1 = getPersonality(mage1.id);
-    const pers2 = getPersonality(mage2.id);
+  const combat = initCombat([playerPrepped, opponentPrepped], 'tournament');
 
-    const choice1 = chooseCards(p1Current.hand, p1Current, p2Current, pers1, combat);
-    const choice2 = chooseCards(p2Current.hand, p2Current, p1Current, pers2, combat);
-
-    if (choice1) {
-      const queued = aiChoicesToQueued(choice1);
-      for (const q of queued) {
-        combat = queueSpellForCombat(combat, p1.id, q);
+  // Generate AI opponent's first move
+  const opponentParticipant = combat.participants.find(p => p.id === opponent.id);
+  if (opponentParticipant) {
+    const playerParticipant = combat.participants.find(p => p.id === 'player')!;
+    const personality = getPersonality(opponent.id);
+    const choice = chooseCards(opponentParticipant.hand, opponentParticipant, playerParticipant, personality, combat);
+    if (choice) {
+      let combatWithAI = combat;
+      for (const q of aiChoicesToQueued(choice)) {
+        combatWithAI = queueSpellForCombat(combatWithAI, opponent.id, q);
       }
-    }
-    if (choice2) {
-      const queued = aiChoicesToQueued(choice2);
-      for (const q of queued) {
-        combat = queueSpellForCombat(combat, p2.id, q);
-      }
-    }
-
-    combat = resolveRound(combat);
-
-    // Check for defeat
-    const p1After = combat.participants.find(p => p.id === p1.id)!;
-    const p2After = combat.participants.find(p => p.id === p2.id)!;
-
-    if (checkDefeat(p1After)) {
-      log.push(`${mage2.name} wins in round ${round + 1}!`);
-      return { winnerId: mage2.id, log };
-    }
-    if (checkDefeat(p2After)) {
-      log.push(`${mage1.name} wins in round ${round + 1}!`);
-      return { winnerId: mage1.id, log };
+      return combatWithAI;
     }
   }
 
-  // Time out: higher vitality wins
-  const p1Final = combat.participants.find(p => p.id === p1.id)!;
-  const p2Final = combat.participants.find(p => p.id === p2.id)!;
-  if (p1Final.vitality >= p2Final.vitality) {
-    log.push(`${mage1.name} wins on points (timeout).`);
-    return { winnerId: mage1.id, log };
-  }
-  log.push(`${mage2.name} wins on points (timeout).`);
-  return { winnerId: mage2.id, log };
+  return combat;
 }
 
 /**
- * Queue a spell for a participant in combat.
+ * After the player's combat resolves, feed the result back into Conclave standings.
+ * Clears pendingPlayerMatch and advances the round/tournament as needed.
  */
-function queueSpellForCombat(state: CombatState, participantId: string, queued: QueuedSpell): CombatState {
+export function resolvePlayerMatchResult(state: ConclaveState, combatResult: CombatState): ConclaveState {
+  if (!state.pendingPlayerMatch || !state.pendingMatchId) return state;
+
+  const opponentId = state.pendingPlayerMatch;
+  const matchId = state.pendingMatchId;
+  const opponent = state.participants.find(m => m.id === opponentId)!;
+
+  // Determine winner
+  const playerParticipant = combatResult.participants.find(p => p.id === 'player');
+  const opponentParticipant = combatResult.participants.find(p => p.id === opponentId);
+
+  let winnerId: string;
+  if (opponentParticipant && checkDefeat(opponentParticipant)) {
+    winnerId = 'player';
+  } else if (playerParticipant && checkDefeat(playerParticipant)) {
+    winnerId = opponentId;
+  } else if ((playerParticipant?.vitality ?? 0) >= (opponentParticipant?.vitality ?? 0)) {
+    winnerId = 'player';
+  } else {
+    winnerId = opponentId;
+  }
+
+  const log = [...state.log, `Match result: ${winnerId === 'player' ? 'You' : opponent.name} ${winnerId === 'player' ? 'defeat' : 'defeats'} ${winnerId === 'player' ? opponent.name : 'you'}.`];
+
+  // Update the match record
+  const matches = state.matches.map(m => {
+    if (m.id === matchId) {
+      return { ...m, winnerId, resolved: true, log: combatResult.log.map(l => l.text) };
+    }
+    return m;
+  });
+
+  // Update standings
+  const standings = state.standings.map(s => {
+    if (s.mageId === winnerId) {
+      return { ...s, wins: s.wins + 1, points: s.points + 3 };
+    }
+    if (s.mageId === (winnerId === 'player' ? opponentId : 'player')) {
+      return { ...s, losses: s.losses + 1 };
+    }
+    return s;
+  });
+
+  // Clear pending match
+  const newState: ConclaveState = {
+    ...state,
+    matches,
+    standings,
+    log,
+    pendingPlayerMatch: null,
+    pendingMatchPhase: null,
+    pendingMatchId: null,
+  };
+
+  // Advance based on what phase we were in
+  if (state.pendingMatchPhase === 'swiss') {
+    const newRound = newState.currentSwissRound + 1;
+    const isLastRound = newRound >= newState.maxSwissRounds;
+    newState.currentSwissRound = newRound;
+    if (isLastRound) {
+      return advanceToAscension(newState);
+    }
+    return newState;
+  }
+
+  if (state.pendingMatchPhase === 'ascension') {
+    return { ...newState, phase: 'complete', winner: winnerId };
+  }
+
+  return newState;
+}
+
+// ---------------------------------------------------------------------------
+// Act III: Ascension Duel
+// ---------------------------------------------------------------------------
+
+/**
+ * Start the Ascension Duel. If the player is a finalist, sets pendingPlayerMatch
+ * for live combat. Otherwise auto-resolves.
+ */
+export function runAscensionDuel(state: ConclaveState): ConclaveState {
+  if (state.phase !== 'ascension' || state.ascensionFinalists.length < 2) {
+    return state;
+  }
+
+  const [id1, id2] = state.ascensionFinalists;
+  const mage1 = state.participants.find(m => m.id === id1)!;
+  const mage2 = state.participants.find(m => m.id === id2)!;
+
+  const playerIsFinalist = id1 === 'player' || id2 === 'player';
+  const opponentId = id1 === 'player' ? id2 : id2 === 'player' ? id1 : null;
+
+  if (playerIsFinalist && opponentId) {
+    // Set pending for live play
+    const matchId = nextMatchId();
+    const match: ConclaveMatch = {
+      id: matchId,
+      round: 0,
+      player1Id: id1,
+      player2Id: id2,
+      winnerId: null,
+      log: [],
+      resolved: false,
+    };
+
+    return {
+      ...state,
+      matches: [...state.matches, match],
+      log: [...state.log, `Ascension Duel: ${mage1.name} vs ${mage2.name}. Fight for the championship!`],
+      pendingPlayerMatch: opponentId,
+      pendingMatchPhase: 'ascension',
+      pendingMatchId: matchId,
+    };
+  }
+
+  // Auto-resolve AI vs AI
+  const result = runAIMatch(mage1, mage2, mage1.maxVitality, 10);
+  const winner = result.winnerId;
+  const winnerName = winner === mage1.id ? mage1.name : mage2.name;
+
   return {
     ...state,
-    participants: state.participants.map(p =>
-      p.id === participantId
-        ? { ...p, queuedSpells: [...p.queuedSpells, queued] }
-        : p
-    ),
+    phase: 'complete',
+    winner,
+    log: [...state.log, `Ascension Duel: ${mage1.name} vs ${mage2.name}`, ...result.log, `${winnerName} wins the Ascension Duel!`],
   };
 }
 
-// Re-import QueuedSpell type — moved to top imports
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-/**
- * Advance to the Ascension Duel with the top two mages.
- */
 function advanceToAscension(state: ConclaveState): ConclaveState {
   const sorted = [...state.standings].sort((a, b) => b.points - a.points || b.wins - a.wins);
   const finalists = sorted.slice(0, 2).map(s => s.mageId);
@@ -279,26 +412,14 @@ function advanceToAscension(state: ConclaveState): ConclaveState {
   };
 }
 
-/**
- * Run the Ascension Duel between the top two mages.
- */
-export function runAscensionDuel(state: ConclaveState): ConclaveState {
-  if (state.phase !== 'ascension' || state.ascensionFinalists.length < 2) {
-    return state;
-  }
-
-  const [id1, id2] = state.ascensionFinalists;
-  const mage1 = state.participants.find(m => m.id === id1)!;
-  const mage2 = state.participants.find(m => m.id === id2)!;
-
-  // Full vitality, up to 10 rounds
-  const p1 = prepMageForCombat(mage1);
-  const p2 = prepMageForCombat(mage2);
+function runAIMatch(mage1: Mage, mage2: Mage, vitality: number, maxRounds: number): { winnerId: string; log: string[] } {
+  const p1 = prepMageForCombat({ ...mage1, vitality, maxVitality: vitality });
+  const p2 = prepMageForCombat({ ...mage2, vitality, maxVitality: vitality });
 
   let combat = initCombat([p1, p2], 'tournament');
-  const log: string[] = [`Ascension Duel: ${mage1.name} vs ${mage2.name}`];
+  const log: string[] = [`Match: ${mage1.name} vs ${mage2.name}`];
 
-  for (let round = 0; round < 10; round++) {
+  for (let round = 0; round < maxRounds; round++) {
     if (combat.result !== 'ongoing') break;
 
     const p1Current = combat.participants.find(p => p.id === p1.id)!;
@@ -327,28 +448,36 @@ export function runAscensionDuel(state: ConclaveState): ConclaveState {
     const p2After = combat.participants.find(p => p.id === p2.id)!;
 
     if (checkDefeat(p1After)) {
-      log.push(`${mage2.name} is victorious! ${mage1.name} yields.`);
-      return { ...state, phase: 'complete', winner: mage2.id, log: [...state.log, ...log] };
+      log.push(`${mage2.name} wins in round ${round + 1}!`);
+      return { winnerId: mage2.id, log };
     }
     if (checkDefeat(p2After)) {
-      log.push(`${mage1.name} is victorious! ${mage2.name} yields.`);
-      return { ...state, phase: 'complete', winner: mage1.id, log: [...state.log, ...log] };
+      log.push(`${mage1.name} wins in round ${round + 1}!`);
+      return { winnerId: mage1.id, log };
     }
   }
 
-  // Timeout: decide by vitality
   const p1Final = combat.participants.find(p => p.id === p1.id)!;
   const p2Final = combat.participants.find(p => p.id === p2.id)!;
-  const winner = p1Final.vitality >= p2Final.vitality ? mage1.id : mage2.id;
-  const winnerName = winner === mage1.id ? mage1.name : mage2.name;
-  log.push(`${winnerName} wins the Ascension Duel on points!`);
-
-  return { ...state, phase: 'complete', winner, log: [...state.log, ...log] };
+  if (p1Final.vitality >= p2Final.vitality) {
+    log.push(`${mage1.name} wins on points (timeout).`);
+    return { winnerId: mage1.id, log };
+  }
+  log.push(`${mage2.name} wins on points (timeout).`);
+  return { winnerId: mage2.id, log };
 }
 
-/**
- * Get the Conclave winner, if any.
- */
+function queueSpellForCombat(state: CombatState, participantId: string, queued: QueuedSpell): CombatState {
+  return {
+    ...state,
+    participants: state.participants.map(p =>
+      p.id === participantId
+        ? { ...p, queuedSpells: [...p.queuedSpells, queued] }
+        : p
+    ),
+  };
+}
+
 export function getConclaveWinner(state: ConclaveState): Mage | null {
   if (state.phase !== 'complete' || !state.winner) return null;
   return state.participants.find(m => m.id === state.winner) ?? null;

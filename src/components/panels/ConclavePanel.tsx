@@ -6,6 +6,7 @@ export function ConclavePanel() {
   const resolveGrandTrial = useGameStore((s) => s.resolveGrandTrial);
   const resolveSwissRound = useGameStore((s) => s.resolveSwissRound);
   const resolveAscensionDuel = useGameStore((s) => s.resolveAscensionDuel);
+  const startConclaveCombat = useGameStore((s) => s.startConclaveCombat);
 
   if (!conclave) {
     return (
@@ -27,6 +28,10 @@ export function ConclavePanel() {
 
   const sortedStandings = [...conclave.standings].sort((a, b) => b.points - a.points || b.wins - a.wins);
   const winner = conclave.winner ? conclave.participants.find(m => m.id === conclave.winner) : null;
+  const hasPendingMatch = !!conclave.pendingPlayerMatch;
+  const opponent = hasPendingMatch
+    ? conclave.participants.find(m => m.id === conclave.pendingPlayerMatch)
+    : null;
 
   return (
     <div className="p-4 text-slate-200 overflow-y-auto h-full">
@@ -34,7 +39,7 @@ export function ConclavePanel() {
 
       {/* Phase indicator */}
       <div className="mb-4">
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-2 text-sm flex-wrap">
           <PhaseBadge active={conclave.phase === 'grand_trial'} label="Grand Trial" />
           <span className="text-slate-600">→</span>
           <PhaseBadge active={conclave.phase === 'swiss'} label={`Swiss R${conclave.currentSwissRound}/${conclave.maxSwissRounds}`} />
@@ -44,6 +49,24 @@ export function ConclavePanel() {
           <PhaseBadge active={conclave.phase === 'complete'} label="Complete" />
         </div>
       </div>
+
+      {/* Pending player match — prominent call to action */}
+      {hasPendingMatch && opponent && (
+        <div className="mb-4 p-3 bg-red-600/20 border border-red-600 rounded text-center">
+          <div className="text-sm text-red-300 mb-1">
+            {conclave.pendingMatchPhase === 'ascension' ? '⚔ ASCENSION DUEL' : '⚔ YOUR SWISS MATCH'}
+          </div>
+          <div className="text-lg font-bold text-white">
+            You vs {opponent.name}
+          </div>
+          <button
+            onClick={() => startConclaveCombat()}
+            className="mt-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded font-semibold text-sm"
+          >
+            Fight Duel
+          </button>
+        </div>
+      )}
 
       {/* Winner display */}
       {conclave.phase === 'complete' && winner && (
@@ -93,7 +116,7 @@ export function ConclavePanel() {
             Run Grand Trial
           </button>
         )}
-        {conclave.phase === 'swiss' && conclave.currentSwissRound < conclave.maxSwissRounds && (
+        {conclave.phase === 'swiss' && !hasPendingMatch && conclave.currentSwissRound < conclave.maxSwissRounds && (
           <button
             onClick={() => resolveSwissRound()}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-semibold text-sm w-full"
@@ -101,7 +124,10 @@ export function ConclavePanel() {
             Run Swiss Round {conclave.currentSwissRound + 1}
           </button>
         )}
-        {conclave.phase === 'ascension' && (
+        {conclave.phase === 'swiss' && hasPendingMatch && (
+          <div className="text-sm text-slate-400 text-center">Resolve your match above to continue.</div>
+        )}
+        {conclave.phase === 'ascension' && !hasPendingMatch && (
           <button
             onClick={() => resolveAscensionDuel()}
             className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded font-semibold text-sm w-full"
@@ -109,8 +135,8 @@ export function ConclavePanel() {
             ⚔ Run Ascension Duel
           </button>
         )}
-        {conclave.phase === 'swiss' && conclave.currentSwissRound >= conclave.maxSwissRounds && (
-          <div className="text-sm text-slate-400">Swiss rounds complete. Proceeding to Ascension...</div>
+        {conclave.phase === 'ascension' && hasPendingMatch && (
+          <div className="text-sm text-slate-400 text-center">Resolve your Ascension Duel above!</div>
         )}
       </div>
 
