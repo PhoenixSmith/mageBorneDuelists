@@ -1,27 +1,28 @@
 import { useGameStore } from '../../store/gameStore';
 import { hexDistance } from '../../game/worldgen/worldgen';
 import { HexMapScene } from '../three/HexMapScene';
+import { Glyph, Seal, type GlyphName, type SealTone } from '../Sigils';
 
 const TERRAIN_COLORS: Record<string, string> = {
-  plains: '#7cb342',
-  forest: '#558b2f',
-  mountains: '#8d6e63',
-  desert: '#fdd835',
-  swamp: '#4e6d3b',
-  water: '#42a5f5',
-  tundra: '#e0e0e0',
-  volcanic: '#bf360c',
-  jungle: '#2e7d32',
-  ruins: '#616161',
+  plains: '#8ca94e',
+  forest: '#4f7a38',
+  mountains: '#8a6f5c',
+  desert: '#d9b064',
+  swamp: '#5c6b3f',
+  water: '#3f7fa0',
+  tundra: '#cfd2cc',
+  volcanic: '#a8402a',
+  jungle: '#3c6b3a',
+  ruins: '#7a6d5f',
 };
 
-const SERVICE_LABELS: Record<string, string> = {
-  inn: '🏨 Inn',
-  college: '🎓 College',
-  forge: '⚒ Forge',
-  alchemist: '⚗ Alchemist',
-  market: '🏪 Market',
-  ritual: '🔮 Ritual Site',
+const SERVICE_META: Record<string, { label: string; glyph: GlyphName; tone: SealTone }> = {
+  inn: { label: 'Inn', glyph: 'bed', tone: 'ox' },
+  college: { label: 'College', glyph: 'book', tone: 'tide' },
+  forge: { label: 'Forge', glyph: 'anvil', tone: 'wood' },
+  alchemist: { label: 'Alchemist', glyph: 'flask', tone: 'moss' },
+  market: { label: 'Market', glyph: 'scales', tone: 'brass' },
+  ritual: { label: 'Ritual Site', glyph: 'rune', tone: 'ink' },
 };
 
 export function MapPanel() {
@@ -50,111 +51,158 @@ export function MapPanel() {
   const canTravel = selectedHex && !isCurrentLocation && selectedHex.discovered && distance > 0;
 
   return (
-    <div className="flex flex-col h-full">
-      {/* 3D hex map (React Three Fiber) */}
-      <div className="flex-1 relative bg-slate-950 overflow-hidden" style={{ touchAction: 'none' }}>
+    <div className="flex flex-col h-full bg-night-800">
+      {/* The scrying window — 3D hex map behind an ornate brass-and-walnut frame */}
+      <div
+        className="flex-1 relative overflow-hidden scrying-frame m-1.5 rounded-lg bg-night-900"
+        style={{ touchAction: 'none' }}
+      >
         <HexMapScene />
       </div>
 
-      {/* Settlement list / hex info — DOM overlay for mobile interaction reliability */}
-      <div className="bg-slate-800 border-t border-slate-700 max-h-56 overflow-y-auto">
+      {/* The open journal page — DOM overlay for mobile interaction reliability */}
+      <div className="paper border-t-4 border-wood-800 max-h-64 overflow-y-auto shadow-page">
         {selectedHex && (
-          <div className="p-2 text-sm text-slate-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="font-semibold capitalize">{selectedHex.terrain}</span>
-                {selectedSettlement && (
-                  <span className="text-amber-400 ml-2">{selectedSettlement.name}</span>
-                )}
+          <div className="px-3 pt-2.5 pb-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="title-display text-lg capitalize leading-tight truncate">
+                  {selectedSettlement ? selectedSettlement.name : selectedHex.terrain}
+                </div>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span
+                    className="w-3 h-3 rounded-seal border border-ink-700 shrink-0"
+                    style={{ backgroundColor: TERRAIN_COLORS[selectedHex.terrain] ?? '#8a6f5c' }}
+                  />
+                  <span className="text-2xs uppercase tracking-[0.14em] text-ink-600 capitalize">
+                    {selectedHex.terrain}
+                    {selectedSettlement && ` · ${selectedSettlement.type}`}
+                  </span>
+                </div>
               </div>
               {isCurrentLocation && (
-                <span className="text-xs text-green-400 font-semibold">You are here</span>
+                <span className="flex items-center gap-1 shrink-0 px-2 py-1 rounded-md border-2 border-moss-deep bg-moss-wash text-moss-deep text-2xs font-display font-bold uppercase tracking-wide">
+                  <Glyph name="compass" className="w-3.5 h-3.5" />
+                  You are here
+                </span>
               )}
             </div>
 
+            <div className="rule-ornate my-1.5" />
+
             {/* Settlement services */}
             {selectedSettlement && (
-              <div className="flex flex-wrap gap-1 mt-1">
-                {selectedSettlement.services.map((svc) => (
-                  <span key={svc} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">
-                    {SERVICE_LABELS[svc] ?? svc}
-                  </span>
-                ))}
+              <div className="flex flex-wrap gap-1.5">
+                {selectedSettlement.services.map((svc) => {
+                  const meta = SERVICE_META[svc];
+                  return (
+                    <span
+                      key={svc}
+                      className="slip flex items-center gap-1.5 pl-1 pr-2 py-1 text-2xs font-semibold text-ink-800"
+                    >
+                      <Seal glyph={meta?.glyph ?? 'rune'} tone={meta?.tone ?? 'ink'} size="xs" />
+                      {meta?.label ?? svc}
+                    </span>
+                  );
+                })}
               </div>
             )}
 
-            {/* Travel info */}
+            {/* Travel writ */}
             {canTravel && (
-              <div className="mt-2">
-                <div className="text-slate-400 text-xs mb-1">
-                  Distance: {distance} hex{distance > 1 ? 'es' : ''} • Est. travel: {Math.max(1, distance)} day{distance > 1 ? 's' : ''}
+              <div className="mt-2 flex items-center justify-between gap-2 slip px-2 py-1.5">
+                <div className="text-2xs text-ink-700 leading-snug">
+                  <span className="font-display font-bold text-ink-900">{distance}</span> hex
+                  {distance > 1 ? 'es' : ''} distant
+                  <br />
+                  <span className="text-ink-600">
+                    est. {Math.max(1, distance)} day{distance > 1 ? 's' : ''} on the road
+                  </span>
                 </div>
-                <button
-                  onClick={() => travelTo(selectedHex.id)}
-                  className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded font-bold"
-                >
-                  🗺 Travel Here
+                <button onClick={() => travelTo(selectedHex.id)} className="btn btn-ox shrink-0">
+                  <Seal glyph="compass" tone="brass" size="sm" />
+                  Travel Here
                 </button>
               </div>
             )}
 
-            {/* Quick actions when at settlement */}
+            {/* Quick actions when standing in a settlement */}
             {isCurrentLocation && selectedSettlement && (
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="flex flex-wrap gap-1.5 mt-2">
                 {selectedSettlement.services.includes('market') && (
-                  <button
-                    onClick={() => setActivePanel('shop')}
-                    className="px-2 py-1 text-[10px] bg-amber-700 hover:bg-amber-600 text-white rounded font-bold"
-                  >
-                    🏪 Market
+                  <button onClick={() => setActivePanel('shop')} className="btn btn-sm btn-brass">
+                    <Glyph name="scales" className="w-4 h-4" />
+                    Market
                   </button>
                 )}
                 {selectedSettlement.services.includes('inn') && (
                   <button
                     onClick={() => useGameStore.getState().rest()}
-                    className="px-2 py-1 text-[10px] bg-green-700 hover:bg-green-600 text-white rounded font-bold"
+                    className="btn btn-sm btn-moss"
                   >
-                    🏨 Rest (5🪙)
+                    <Glyph name="bed" className="w-4 h-4" />
+                    Rest · 5
+                    <Glyph name="coin" className="w-3.5 h-3.5" />
                   </button>
                 )}
-                {(selectedSettlement.services.includes('inn') || selectedSettlement.services.includes('college')) && (
-                  <button
-                    onClick={() => setActivePanel('deck')}
-                    className="px-2 py-1 text-[10px] bg-purple-700 hover:bg-purple-600 text-white rounded font-bold"
-                  >
-                    🃏 Prepare Deck
+                {(selectedSettlement.services.includes('inn') ||
+                  selectedSettlement.services.includes('college')) && (
+                  <button onClick={() => setActivePanel('deck')} className="btn btn-sm btn-wood">
+                    <Glyph name="cards" className="w-4 h-4" />
+                    Prepare Deck
                   </button>
                 )}
-                <button
-                  onClick={() => setActivePanel('quests')}
-                  className="px-2 py-1 text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-200 rounded font-bold"
-                >
-                  ❗ Quests
+                <button onClick={() => setActivePanel('quests')} className="btn btn-sm btn-quiet">
+                  <Glyph name="scroll" className="w-4 h-4" />
+                  Quests
                 </button>
               </div>
             )}
           </div>
         )}
-        <div className="p-2">
-          <div className="text-xs text-slate-400 font-semibold mb-1">Nearby Settlements</div>
-          {settlements
-            .filter((s) => s.hex?.discovered)
-            .map((s) => {
-              const dist = playerHex
-                ? hexDistance(s.hex.q, s.hex.r, playerHex.q, playerHex.r)
-                : 0;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => selectHex(s.hexId)}
-                  className="block w-full text-left px-2 py-1 text-xs text-slate-300 hover:bg-slate-700 rounded"
-                >
-                  <span className="text-amber-400">{s.name}</span>
-                  <span className="text-slate-500 ml-2">({s.type})</span>
-                  <span className="text-slate-500 ml-2">{dist} hexes</span>
-                </button>
-              );
-            })}
+
+        {/* Gazetteer — each settlement a little rolled scroll */}
+        <div className="px-3 pt-2 pb-3">
+          <h3 className="chapter text-2xs mb-1.5">Nearby Settlements</h3>
+          <div className="space-y-1">
+            {settlements
+              .filter((s) => s.hex?.discovered)
+              .map((s) => {
+                const dist = playerHex
+                  ? hexDistance(s.hex.q, s.hex.r, playerHex.q, playerHex.r)
+                  : 0;
+                const here = s.hexId === world.playerHexId;
+                const selected = s.hexId === selectedHexId;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => selectHex(s.hexId)}
+                    className={`slip w-full flex items-center gap-2 text-left pl-1.5 pr-2 py-1.5 transition-all ${
+                      selected ? 'border-brass-700 shadow-gilt' : 'hover:border-ink-700'
+                    }`}
+                    style={{ minHeight: 44 }}
+                  >
+                    <span
+                      className="w-1.5 self-stretch rounded-sm shrink-0"
+                      style={{ backgroundColor: TERRAIN_COLORS[s.hex?.terrain] ?? '#8a6f5c' }}
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-display font-bold text-sm text-ink-900 truncate">
+                        {s.name}
+                      </span>
+                      <span className="block text-2xs italic text-ink-600 capitalize">{s.type}</span>
+                    </span>
+                    {here ? (
+                      <Seal glyph="compass" tone="moss" size="sm" title="You are here" />
+                    ) : (
+                      <span className="seal-blank w-9 h-7 rounded-md text-2xs font-display font-bold text-ink-700 tabular-nums">
+                        {dist}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+          </div>
         </div>
       </div>
     </div>

@@ -16,67 +16,107 @@ import {
   generateMonsterAction,
 } from '../../game/engine/combat';
 import type { CombatParticipant, Condition } from '../../types';
+import { ARCANE, ELEMENT_GLYPH, ElementSeal, Glyph, elementInk, type GlyphName } from '../Sigils';
 
 // --- Helpers ----------------------------------------------------------------
 
-const ELEMENT_COLORS: Record<string, string> = {
-  fire: 'text-red-400 border-red-600',
-  water: 'text-blue-400 border-blue-600',
-  wind: 'text-cyan-300 border-cyan-500',
-  earth: 'text-amber-600 border-amber-700',
-  magma: 'text-orange-500 border-orange-700',
-  lightning: 'text-yellow-400 border-yellow-600',
-  steam: 'text-slate-300 border-slate-500',
-  storm: 'text-indigo-300 border-indigo-500',
+const CONDITION_META: Record<string, { label: string; glyph: GlyphName; className: string }> = {
+  burn: { label: 'Burn', glyph: 'flame', className: 'border-ember-deep bg-ember-wash text-ember-deep' },
+  soaked: { label: 'Soaked', glyph: 'droplet', className: 'border-tide-deep bg-tide-wash text-tide-deep' },
+  unsteady: { label: 'Unsteady', glyph: 'spiral', className: 'border-gale-deep bg-gale-wash text-gale-deep' },
+  bound: { label: 'Bound', glyph: 'chain', className: 'border-loam-deep bg-loam-wash text-loam-deep' },
+  exposed: { label: 'Exposed', glyph: 'eye', className: 'border-oxblood-800 bg-parchment-200 text-oxblood-800' },
+  silenced: { label: 'Silenced', glyph: 'hush', className: 'border-ink-700 bg-parchment-200 text-ink-800' },
 };
 
-const CONDITION_LABELS: Record<string, string> = {
-  burn: '🔥 Burn',
-  soaked: '💧 Soaked',
-  unsteady: '💫 Unsteady',
-  bound: '🔒 Bound',
-  exposed: '⚠ Exposed',
-  silenced: '🔇 Silenced',
-};
-
-function elementColor(el: string): string {
-  return ELEMENT_COLORS[el] ?? 'text-slate-300 border-slate-600';
+/** Chunky serif stat, almanac-style: label above, numeral below. */
+function StatBlock({
+  label,
+  value,
+  max,
+  fill,
+}: {
+  label: string;
+  value: number;
+  max?: number;
+  fill?: string;
+}) {
+  const pct = max && max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : null;
+  return (
+    <div className="flex-1 text-center">
+      <div className="text-2xs uppercase tracking-[0.14em] text-ink-600 leading-none">{label}</div>
+      <div className="font-display font-bold text-ink-900 leading-tight tabular-nums text-[15px]">
+        {value}
+        {max !== undefined && <span className="text-2xs text-ink-600">/{max}</span>}
+      </div>
+      {pct !== null && (
+        <div className="meter h-1.5 mt-0.5">
+          <div className="meter-fill" style={{ width: `${pct}%`, backgroundColor: fill }} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ParticipantCard({ p }: { p: CombatParticipant }) {
+  const frame = p.isPlayer
+    ? 'border-brass-700'
+    : 'border-oxblood-700';
+  const nameplate = p.isPlayer ? 'brass-plate text-ink-900' : 'leather text-parchment-100';
+
   return (
-    <div className={`p-2 rounded border ${p.isPlayer ? 'border-blue-500 bg-blue-950/30' : 'border-red-500 bg-red-950/30'}`}>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-sm font-bold">{p.name}</span>
-        <span className="text-xs text-slate-400">{p.isPlayer ? 'Player' : 'Enemy'}</span>
+    <div className={`plaque ${frame} overflow-hidden`}>
+      {/* Nameplate */}
+      <div className={`${nameplate} flex items-center gap-1.5 px-2 py-1 border-b-2 border-ink-800`}>
+        <span
+          className="w-6 h-6 rounded-seal border-2 border-ink-900/60 flex items-center justify-center shrink-0"
+          style={{ background: 'rgba(28,20,14,0.28)' }}
+        >
+          <Glyph name={p.isPlayer ? 'hat' : 'skull'} className="w-3.5 h-3.5" />
+        </span>
+        <span className="font-display font-bold text-2xs leading-tight truncate flex-1">{p.name}</span>
       </div>
-      <div className="grid grid-cols-3 gap-1 text-xs">
-        <div className="text-center">
-          <div className="text-slate-500">VIT</div>
-          <div className="text-red-400 font-bold">{p.vitality}/{p.maxVitality}</div>
+
+      <div className="px-2 py-1.5">
+        <div className="flex gap-1.5">
+          <StatBlock label="Vit" value={p.vitality} max={p.maxVitality} fill="#c0392b" />
+          <StatBlock label="Foc" value={p.focus} max={p.maxFocus} fill={ARCANE} />
+          <StatBlock label="Grd" value={p.guard} />
         </div>
-        <div className="text-center">
-          <div className="text-slate-500">FOC</div>
-          <div className="text-purple-400 font-bold">{p.focus}/{p.maxFocus}</div>
-        </div>
-        <div className="text-center">
-          <div className="text-slate-500">GRD</div>
-          <div className="text-green-400 font-bold">{p.guard}</div>
-        </div>
-      </div>
-      <div className="flex items-center justify-between mt-1 text-xs">
-        <span className="text-slate-400">Range: <span className="text-slate-200 capitalize">{p.range}</span></span>
-        {p.armor > 0 && <span className="text-slate-400">Armor: {p.armor}</span>}
-      </div>
-      {p.conditions.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-1">
-          {p.conditions.map((c: Condition, i: number) => (
-            <span key={i} className="text-[10px] px-1 py-0.5 rounded bg-slate-700 text-slate-300">
-              {CONDITION_LABELS[c.type] ?? c.type} ({c.duration})
+
+        <div className="flex items-center justify-between gap-1 mt-1.5 text-2xs text-ink-700">
+          <span className="capitalize">
+            <span className="text-ink-600">Range </span>
+            <span className="font-display font-bold text-ink-900">{p.range}</span>
+          </span>
+          {p.armor > 0 && (
+            <span>
+              <span className="text-ink-600">Armor </span>
+              <span className="font-display font-bold text-ink-900">{p.armor}</span>
             </span>
-          ))}
+          )}
         </div>
-      )}
+
+        {p.conditions.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {p.conditions.map((c: Condition, i: number) => {
+              const meta = CONDITION_META[c.type];
+              return (
+                <span
+                  key={i}
+                  className={`flex items-center gap-1 px-1 py-0.5 rounded border text-2xs font-semibold ${
+                    meta?.className ?? 'border-ink-700 bg-parchment-200 text-ink-800'
+                  }`}
+                >
+                  <Glyph name={meta?.glyph ?? 'rune'} className="w-3 h-3" />
+                  {meta?.label ?? c.type}
+                  <span className="opacity-70">{c.duration}</span>
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -97,11 +137,16 @@ function SpellCardView({
   if (cardId === '__fatigue__') {
     return (
       <div
-        className="p-2 rounded border border-slate-700 bg-slate-800/50 cursor-pointer min-w-[140px]"
+        className="plaque-aged shrink-0 w-[172px] p-2 cursor-pointer opacity-80"
         onClick={onClick}
+        style={{ borderStyle: 'dashed' }}
       >
-        <div className="text-xs font-bold text-slate-500">FATIGUE</div>
-        <div className="text-[10px] text-slate-600">Dead card. Discard at end of turn or spend 1 Focus.</div>
+        <div className="font-display font-bold text-2xs uppercase tracking-widest text-ink-600">
+          Fatigue
+        </div>
+        <div className="text-2xs text-ink-600 italic mt-1 leading-snug">
+          A dead page. Discard at end of turn, or spend 1 Focus.
+        </div>
       </div>
     );
   }
@@ -111,49 +156,100 @@ function SpellCardView({
     const behavior = getBehaviorCard(cardId);
     if (behavior) {
       return (
-        <div className="p-2 rounded border border-red-700 bg-red-950/40 min-w-[140px]">
-          <div className="text-xs font-bold text-red-400">{behavior.name}</div>
-          <div className="text-[10px] text-slate-400">Speed: {behavior.speed}</div>
-          <div className="text-[10px] text-slate-500 mt-1">{behavior.effect}</div>
+        <div className="plaque shrink-0 w-[172px] p-2 border-oxblood-700">
+          <div className="flex items-center justify-between gap-1">
+            <span className="font-display font-bold text-2xs text-oxblood-800">{behavior.name}</span>
+            <span className="text-2xs text-ink-600">SPD {behavior.speed}</span>
+          </div>
+          <div className="text-2xs text-ink-700 mt-1 leading-snug">{behavior.effect}</div>
         </div>
       );
     }
     return null;
   }
 
+  const modeRing =
+    useMode === 'cast'
+      ? 'shadow-[0_0_0_2px_#2e6f8e]'
+      : useMode === 'maneuver'
+      ? 'shadow-[0_0_0_2px_#4e7a45]'
+      : '';
+
   return (
     <div
-      className={`p-2 rounded border min-w-[140px] cursor-pointer transition-all ${
-        selected
-          ? `ring-2 ring-amber-400 ${elementColor(spell.element)}`
-          : `${elementColor(spell.element)} bg-slate-800/50`
-      } ${useMode === 'cast' ? 'ring-2 ring-blue-400' : ''} ${useMode === 'maneuver' ? 'ring-2 ring-green-400' : ''}`}
+      className={`spellcard spellcard-tappable ${elementInk(spell.element)} shrink-0 w-[176px] ${
+        selected ? 'spellcard-active' : ''
+      } ${modeRing}`}
       onClick={onClick}
     >
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold capitalize">{spell.name}</span>
-        <span className="text-[10px] text-slate-500">SPD {spell.speed}</span>
-      </div>
-      <div className="text-[10px] text-slate-400 capitalize">{spell.element} • {spell.tags.join(', ')}</div>
-      <div className="text-[10px] text-slate-300 mt-1">
-        <span className="text-blue-400">Cast:</span> {spell.cast}
-      </div>
-      <div className="text-[10px] text-slate-400 mt-0.5">
-        <span className="text-green-400">Maneuver:</span> {spell.maneuver}
-      </div>
-      {spell.empower && (
-        <div className="text-[10px] text-amber-400 mt-0.5">
-          <span className="text-amber-500">Empower:</span> {spell.empower}
+      <div className="spellcard-body p-2">
+        <div className="flex items-start gap-1.5">
+          <ElementSeal glyph={ELEMENT_GLYPH[spell.element] ?? 'mountain'} size="sm" title={spell.element} />
+          <div className="flex-1 min-w-0">
+            <div className="font-display font-bold text-2xs leading-tight text-ink-900 capitalize truncate">
+              {spell.name}
+            </div>
+            <div className="text-2xs italic text-ink-600 capitalize truncate">
+              {spell.element} · {spell.tags.join(', ')}
+            </div>
+          </div>
+          <span className="slip px-1 py-0.5 text-center leading-none shrink-0">
+            <span className="block text-2xs uppercase text-ink-600">Spd</span>
+            <span className="block font-display font-bold text-2xs text-ink-900">{spell.speed}</span>
+          </span>
         </div>
-      )}
-      {spell.overcharge && (
-        <div className="text-[10px] text-red-400 mt-0.5">
-          <span className="text-red-500">Overcharge:</span> {spell.overcharge}
+
+        <div className="my-1 border-t border-ink-700/25" />
+
+        <div className="space-y-0.5 text-2xs leading-snug text-ink-800">
+          <div>
+            <span className="inked-label mr-1" style={{ color: 'var(--el-deep)' }}>
+              Cast
+            </span>
+            {spell.cast}
+          </div>
+          <div>
+            <span className="inked-label mr-1 text-moss-deep">Maneuver</span>
+            {spell.maneuver}
+          </div>
+          {spell.empower && (
+            <div>
+              <span className="inked-label mr-1 text-brass-900">Empower</span>
+              {spell.empower}
+            </div>
+          )}
+          {spell.overcharge && (
+            <div>
+              <span className="inked-label mr-1 text-oxblood-700">Overcharge</span>
+              {spell.overcharge}
+            </div>
+          )}
         </div>
-      )}
-      {spell.burnIcon && (
-        <div className="text-[10px] text-orange-500 mt-0.5">🔥 Burn Icon</div>
-      )}
+
+        <div className="flex items-center justify-between gap-1 mt-1.5">
+          <span className="text-2xs text-ink-600">
+            Focus <span className="font-display font-bold text-ink-900">{spell.focusCost}</span>
+          </span>
+          {spell.burnIcon && (
+            <span className="flex items-center gap-0.5 px-1 rounded border border-ember-deep bg-ember-wash text-ember-deep">
+              <Glyph name="flame" className="w-3 h-3" />
+              <span className="text-2xs font-bold uppercase tracking-wider">Burn</span>
+            </span>
+          )}
+        </div>
+
+        {useMode && (
+          <div
+            className={`mt-1 text-center text-2xs font-display font-bold uppercase tracking-widest rounded py-0.5 ${
+              useMode === 'cast'
+                ? 'bg-tide-wash text-tide-deep border border-tide-deep'
+                : 'bg-moss-wash text-moss-deep border border-moss-deep'
+            }`}
+          >
+            {useMode}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -249,19 +345,25 @@ export function CombatPanel() {
   if (!combat) {
     const hasPendingConclave = !!world.conclave?.pendingPlayerMatch;
     return (
-      <div className="p-4 text-slate-200 overflow-y-auto h-full flex flex-col items-center justify-center gap-4">
-        <h2 className="text-lg font-bold text-red-400">Combat</h2>
-        <p className="text-slate-400 text-sm">No active combat.</p>
-        {hasPendingConclave ? (
-          <p className="text-purple-400 text-sm">Go to the Conclave tab to start your match.</p>
-        ) : (
-          <button
-            onClick={startTestCombat}
-            className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded font-bold text-sm transition-colors"
-          >
-            ⚔ Start Test Combat
-          </button>
-        )}
+      <div className="panel-scroll flex flex-col items-center justify-center p-6">
+        <div className="page px-6 py-7 text-center max-w-sm">
+          <span className="seal-ox w-16 h-16 mx-auto mb-3">
+            <Glyph name="swords" className="w-8 h-8" />
+          </span>
+          <h2 className="title-display text-xl">The Duelling Ground</h2>
+          <div className="rule-ornate my-2" />
+          <p className="marginalia text-sm">No duel is underway.</p>
+          {hasPendingConclave ? (
+            <p className="text-2xs text-oxblood-700 font-semibold mt-3 leading-snug">
+              A Conclave match awaits you — open the Conclave to answer the challenge.
+            </p>
+          ) : (
+            <button onClick={startTestCombat} className="btn btn-ox mt-4 w-full">
+              <Glyph name="swords" className="w-4 h-4" />
+              Start Test Combat
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -277,162 +379,206 @@ export function CombatPanel() {
   const enemyMonster = enemy ? getMonster('ash_troll') : undefined;
 
   return (
-    <div className="p-3 text-slate-200 overflow-y-auto h-full flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-red-400">Combat</h2>
-        <div className="text-sm text-slate-400">
-          Round {combat.round} • Phase: <span className="text-amber-400 capitalize">{combat.phase}</span>
-          {combat.result !== 'ongoing' && (
-            <span className={`ml-2 font-bold ${combat.result === 'victory' ? 'text-green-400' : 'text-red-400'}`}>
-              {combat.result.toUpperCase()}
+    <div className="panel-scroll">
+      <div className="p-2.5 flex flex-col gap-2.5">
+        {/* --- Header ------------------------------------------------------- */}
+        <div className="page px-3 py-2 flex items-center justify-between gap-2">
+          <h2 className="title-display text-lg leading-none">Duel</h2>
+          <div className="flex items-center gap-1.5">
+            <span className="slip px-2 py-1 text-2xs text-ink-700 leading-none">
+              Round{' '}
+              <span className="font-display font-bold text-ink-900 text-sm">{combat.round}</span>
             </span>
-          )}
-        </div>
-      </div>
-
-      {/* Participants */}
-      <div className="grid grid-cols-2 gap-2">
-        {player && <ParticipantCard p={player} />}
-        {enemy && <ParticipantCard p={enemy} />}
-      </div>
-
-      {/* Enemy Intent */}
-      {enemyIntentCard && (
-        <div className="p-2 rounded border border-red-700 bg-red-950/30">
-          <div className="text-xs text-slate-400 mb-1">Enemy Intent:</div>
-          <div className="text-sm font-bold text-red-400">{enemyIntentCard.name}</div>
-          <div className="text-xs text-slate-400">Speed: {enemyIntentCard.speed}</div>
-          {'effect' in enemyIntentCard && (
-            <div className="text-xs text-slate-300 mt-1">{enemyIntentCard.effect}</div>
-          )}
-          {'cast' in enemyIntentCard && (
-            <div className="text-xs text-slate-300 mt-1">{enemyIntentCard.cast}</div>
-          )}
-        </div>
-      )}
-
-      {/* Casting Timeline */}
-      {combat.timeline.length > 0 && (
-        <div className="p-2 rounded border border-slate-700 bg-slate-800/50">
-          <div className="text-xs text-slate-400 mb-1">Casting Timeline (by Speed):</div>
-          <div className="flex flex-col gap-1">
-            {combat.timeline.map((entry, i) => {
-              const spell = getSpell(entry.spell.cardId) ?? getBehaviorCard(entry.spell.cardId);
-              const caster = combat.participants.find((p) => p.id === entry.casterId);
-              return (
-                <div
-                  key={i}
-                  className={`text-xs flex items-center gap-2 px-2 py-1 rounded ${
-                    entry.fizzled
-                      ? 'bg-slate-700/50 text-slate-500 line-through'
-                      : entry.resolved
-                      ? 'bg-green-900/30 text-green-400'
-                      : 'bg-slate-700/50'
-                  }`}
-                >
-                  <span className="text-slate-500">[{entry.spell.speed}]</span>
-                  <span className="font-bold">{caster?.name}</span>
-                  <span>→</span>
-                  <span>{spell?.name ?? entry.spell.cardId}</span>
-                  {entry.spell.empowered && <span className="text-amber-400">★</span>}
-                  {entry.spell.overcharged && <span className="text-red-400">!!</span>}
-                  {entry.fizzled && <span className="text-slate-500">(fizzled)</span>}
-                  {entry.resolved && <span className="text-green-500">✓</span>}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Player Hand */}
-      {player && (
-        <div className="p-2 rounded border border-slate-700 bg-slate-800/50">
-          <div className="text-xs text-slate-400 mb-2 flex items-center justify-between">
-            <span>Your Hand ({player.hand.length} cards):</span>
-            <span className="text-slate-500">Click = Cast | Shift+Click = Maneuver</span>
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {player.hand.length === 0 ? (
-              <div className="text-xs text-slate-500">No cards in hand.</div>
-            ) : (
-              player.hand.map((cardId, i) => (
-                <SpellCardView
-                  key={`${cardId}-${i}`}
-                  cardId={cardId}
-                  selected={cardId in selectedCards}
-                  useMode={selectedCards[cardId] ?? null}
-                  onClick={(e) => handleCardClick(cardId, e)}
-                />
-              ))
+            <span className="slip px-2 py-1 text-2xs text-ink-700 capitalize leading-none">
+              {combat.phase}
+            </span>
+            {combat.result !== 'ongoing' && (
+              <span
+                className={`px-2 py-1 rounded-md border-2 font-display font-bold text-2xs uppercase tracking-widest ${
+                  combat.result === 'victory'
+                    ? 'border-moss-deep bg-moss-wash text-moss-deep'
+                    : 'border-oxblood-800 bg-ember-wash text-oxblood-800'
+                }`}
+              >
+                {combat.result}
+              </span>
             )}
           </div>
-          {Object.keys(selectedCards).length > 0 && (
-            <div className="text-xs text-amber-400 mt-1">
-              {Object.keys(selectedCards).length} card(s) queued for casting.
+        </div>
+
+        {/* --- Portrait plaques --------------------------------------------- */}
+        <div className="grid grid-cols-2 gap-2">
+          {player && <ParticipantCard p={player} />}
+          {enemy && <ParticipantCard p={enemy} />}
+        </div>
+
+        {/* --- Scrying note: enemy intent ----------------------------------- */}
+        {enemyIntentCard && (
+          <div
+            className="plaque border-tide-deep px-2.5 py-2"
+            style={{
+              backgroundImage:
+                'linear-gradient(180deg, rgba(219,231,236,0.9) 0%, rgba(243,234,216,0) 55%)',
+            }}
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="seal-tide w-6 h-6">
+                <Glyph name="eye" className="w-3.5 h-3.5" />
+              </span>
+              <span className="inked-label text-tide-deep">Scried Intent</span>
+              <span className="ml-auto text-2xs text-ink-600">
+                Speed <span className="font-display font-bold text-ink-900">{enemyIntentCard.speed}</span>
+              </span>
             </div>
+            <div className="font-display font-bold text-sm text-oxblood-800 mt-1">
+              {enemyIntentCard.name}
+            </div>
+            {'effect' in enemyIntentCard && (
+              <div className="text-2xs text-ink-700 leading-snug">{enemyIntentCard.effect}</div>
+            )}
+            {'cast' in enemyIntentCard && (
+              <div className="text-2xs text-ink-700 leading-snug">{enemyIntentCard.cast}</div>
+            )}
+          </div>
+        )}
+
+        {/* --- Casting ledger ------------------------------------------------ */}
+        {combat.timeline.length > 0 && (
+          <div className="page px-3 py-2">
+            <h3 className="chapter text-2xs mb-1.5">Casting Order</h3>
+            <div className="flex flex-col">
+              {combat.timeline.map((entry, i) => {
+                const spell = getSpell(entry.spell.cardId) ?? getBehaviorCard(entry.spell.cardId);
+                const caster = combat.participants.find((p) => p.id === entry.casterId);
+                return (
+                  <div
+                    key={i}
+                    className={`ledger-row flex items-center gap-2 px-1.5 py-1 text-2xs ${
+                      entry.fizzled
+                        ? 'text-ink-500 line-through'
+                        : entry.resolved
+                        ? 'text-moss-deep'
+                        : 'text-ink-800'
+                    }`}
+                  >
+                    <span className="seal-blank w-6 h-5 rounded text-2xs font-display font-bold tabular-nums">
+                      {entry.spell.speed}
+                    </span>
+                    <span className="font-display font-bold truncate max-w-[35%]">
+                      {caster?.name}
+                    </span>
+                    <span className="text-ink-500">→</span>
+                    <span className="truncate flex-1">{spell?.name ?? entry.spell.cardId}</span>
+                    {entry.spell.empowered && (
+                      <Glyph name="star" className="w-3 h-3 text-brass-700 shrink-0" />
+                    )}
+                    {entry.spell.overcharged && (
+                      <Glyph name="bolt" className="w-3 h-3 text-oxblood-700 shrink-0" />
+                    )}
+                    {entry.fizzled && <span className="italic shrink-0">fizzled</span>}
+                    {entry.resolved && (
+                      <Glyph name="check" className="w-3 h-3 text-moss-deep shrink-0" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* --- Hand ---------------------------------------------------------- */}
+        {player && (
+          <div className="page px-3 py-2">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <h3 className="chapter text-2xs flex-1">Your Hand · {player.hand.length}</h3>
+              <span className="text-2xs italic text-ink-600 shrink-0">
+                tap = cast · shift+tap = maneuver
+              </span>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1.5 -mx-1 px-1">
+              {player.hand.length === 0 ? (
+                <div className="marginalia text-2xs">No cards in hand.</div>
+              ) : (
+                player.hand.map((cardId, i) => (
+                  <SpellCardView
+                    key={`${cardId}-${i}`}
+                    cardId={cardId}
+                    selected={cardId in selectedCards}
+                    useMode={selectedCards[cardId] ?? null}
+                    onClick={(e) => handleCardClick(cardId, e)}
+                  />
+                ))
+              )}
+            </div>
+            {Object.keys(selectedCards).length > 0 && (
+              <div className="text-2xs text-brass-900 font-semibold mt-1">
+                {Object.keys(selectedCards).length} card(s) queued for the round.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* --- Actions -------------------------------------------------------- */}
+        <div className="flex gap-2">
+          <button
+            onClick={handleResolveRound}
+            disabled={combat.result !== 'ongoing'}
+            className="btn btn-brass flex-1 text-base"
+          >
+            <Glyph name="swords" className="w-5 h-5" />
+            Resolve Round
+          </button>
+          {isConclaveCombat && combat.result !== 'ongoing' ? (
+            <button onClick={() => resolveConclaveCombat()} className="btn btn-ox">
+              <Glyph name="chalice" className="w-4 h-4" />
+              Conclave
+            </button>
+          ) : (
+            <button onClick={startTestCombat} className="btn btn-quiet">
+              Restart
+            </button>
           )}
         </div>
-      )}
 
-      {/* Action buttons */}
-      <div className="flex gap-2">
-        <button
-          onClick={handleResolveRound}
-          disabled={combat.result !== 'ongoing'}
-          className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded font-bold text-sm transition-colors"
-        >
-          ⚔ Resolve Round
-        </button>
-        {isConclaveCombat && combat.result !== 'ongoing' ? (
-          <button
-            onClick={() => resolveConclaveCombat()}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded font-bold text-sm transition-colors"
-          >
-            🏆 Return to Conclave
-          </button>
-        ) : (
-          <button
-            onClick={startTestCombat}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded font-bold text-sm transition-colors"
-          >
-            ↻ Restart Test Combat
-          </button>
+        {/* --- Combat ledger --------------------------------------------------- */}
+        <div className="plaque-aged px-3 py-2 flex-1 min-h-[110px] max-h-[210px] overflow-y-auto">
+          <h3 className="chapter text-2xs mb-1">Duel Record</h3>
+          <div className="flex flex-col gap-0.5">
+            {combat.log.slice(-30).map((entry, i) => (
+              <div
+                key={i}
+                className={`text-2xs leading-snug ${
+                  entry.type === 'damage' ? 'text-oxblood-800' :
+                  entry.type === 'heal' ? 'text-moss-deep' :
+                  entry.type === 'condition' ? 'text-tempest-deep' :
+                  entry.type === 'fizzle' ? 'text-ink-500 italic' :
+                  entry.type === 'victory' ? 'text-moss-deep font-bold' :
+                  entry.type === 'defeat' ? 'text-oxblood-800 font-bold' :
+                  entry.type === 'move' ? 'text-tide-deep' :
+                  'text-ink-700'
+                }`}
+              >
+                <span className="font-display font-bold text-ink-500 mr-1">R{entry.round}</span>
+                {entry.text}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* --- Bestiary marginalia ---------------------------------------------- */}
+        {enemyMonster && (
+          <div className="slip px-2.5 py-2 text-2xs text-ink-700 leading-snug">
+            <div>
+              <span className="inked-label text-oxblood-700 mr-1">Passive</span>
+              {enemyMonster.passive}
+            </div>
+            <div className="mt-0.5">
+              <span className="inked-label text-oxblood-700 mr-1">Escalation</span>
+              {enemyMonster.escalationRule}
+            </div>
+          </div>
         )}
       </div>
-
-      {/* Combat Log */}
-      <div className="p-2 rounded border border-slate-700 bg-slate-900/50 flex-1 min-h-[100px] max-h-[200px] overflow-y-auto">
-        <div className="text-xs text-slate-400 mb-1">Combat Log:</div>
-        <div className="flex flex-col gap-0.5">
-          {combat.log.slice(-30).map((entry, i) => (
-            <div
-              key={i}
-              className={`text-xs ${
-                entry.type === 'damage' ? 'text-red-400' :
-                entry.type === 'heal' ? 'text-green-400' :
-                entry.type === 'condition' ? 'text-purple-400' :
-                entry.type === 'fizzle' ? 'text-slate-500 italic' :
-                entry.type === 'victory' ? 'text-green-500 font-bold' :
-                entry.type === 'defeat' ? 'text-red-500 font-bold' :
-                entry.type === 'move' ? 'text-cyan-400' :
-                'text-slate-400'
-              }`}
-            >
-              <span className="text-slate-600">[R{entry.round}]</span> {entry.text}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Passive info */}
-      {enemyMonster && (
-        <div className="text-xs text-slate-500 border-t border-slate-700 pt-2">
-          <span className="text-slate-400">Passive:</span> {enemyMonster.passive}
-          <br />
-          <span className="text-slate-400">Escalation:</span> {enemyMonster.escalationRule}
-        </div>
-      )}
     </div>
   );
 }

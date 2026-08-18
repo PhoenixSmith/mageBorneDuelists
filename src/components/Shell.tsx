@@ -1,30 +1,66 @@
 import { useGameStore } from '../store/gameStore';
 import type { PanelType } from '../types';
+import { Glyph, Seal, type GlyphName } from './Sigils';
 
-const NAV_ITEMS: Array<{ id: PanelType; label: string; icon: string }> = [
-  { id: 'map', label: 'Map', icon: '🗺' },
-  { id: 'deck', label: 'Deck', icon: '🃏' },
-  { id: 'combat', label: 'Combat', icon: '⚔' },
-  { id: 'quests', label: 'Quests', icon: '❗' },
-  { id: 'shop', label: 'Shop', icon: '🏪' },
-  { id: 'character', label: 'Mage', icon: '🧙' },
-  { id: 'conclave', label: 'Conclave', icon: '🏆' },
+const NAV_ITEMS: Array<{ id: PanelType; label: string; icon: GlyphName }> = [
+  { id: 'map', label: 'Map', icon: 'hex' },
+  { id: 'deck', label: 'Deck', icon: 'cards' },
+  { id: 'combat', label: 'Combat', icon: 'swords' },
+  { id: 'quests', label: 'Quests', icon: 'scroll' },
+  { id: 'shop', label: 'Shop', icon: 'scales' },
+  { id: 'character', label: 'Mage', icon: 'hat' },
+  { id: 'conclave', label: 'Conclave', icon: 'chalice' },
 ];
+
+/** Resource reading: wax seal + serif numeral, set into a recessed slot. */
+function Tally({
+  glyph,
+  tone,
+  value,
+  title,
+}: {
+  glyph: GlyphName;
+  tone: 'brass' | 'tide' | 'arcane';
+  value: number;
+  title: string;
+}) {
+  return (
+    <div
+      className="flex items-center gap-1.5 pl-0.5 pr-2 py-0.5 rounded-seal border border-wood-900/70 bg-wood-900/50"
+      style={{ boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)' }}
+      title={title}
+    >
+      <Seal glyph={glyph} tone={tone} size="sm" />
+      <span className="font-display font-bold text-sm text-parchment-100 tabular-nums leading-none">
+        {value}
+      </span>
+    </div>
+  );
+}
 
 export function TopBar() {
   const world = useGameStore((s) => s.world);
   const daysLeft = world.maxDays - world.day;
 
   return (
-    <div className="flex items-center justify-between px-3 py-2 bg-slate-900 text-white border-b border-slate-700">
-      <div className="flex items-center gap-3 text-sm">
-        <span className="text-amber-400 font-bold">🪙 {world.player.coin}</span>
-        <span className="text-blue-400">💎 {Object.values(world.player.reagents).reduce((a, b) => a + b, 0)}</span>
-        <span className="text-purple-400">✦ {world.player.focus}</span>
+    <div className="wood flex items-center justify-between gap-2 px-2.5 py-1.5 border-b-2 border-night-900 shadow-carved z-10">
+      <div className="flex items-center gap-1.5">
+        <Tally glyph="coin" tone="brass" value={world.player.coin} title="Coin" />
+        <Tally
+          glyph="gem"
+          tone="tide"
+          value={Object.values(world.player.reagents).reduce((a, b) => a + b, 0)}
+          title="Reagents"
+        />
+        <Tally glyph="essence" tone="arcane" value={world.player.focus} title="Focus" />
       </div>
-      <div className="text-sm font-semibold">
-        Day {world.day} / {world.maxDays}
-        <span className="text-slate-400 ml-2">({daysLeft} days left)</span>
+
+      {/* Almanac page edge — the day counter is a tab on the page block */}
+      <div className="page-edge flex items-baseline gap-1.5 pl-2 pr-2.5 py-1">
+        <span className="text-2xs uppercase tracking-[0.16em] text-ink-600">Day</span>
+        <span className="font-display font-bold text-base leading-none tabular-nums">{world.day}</span>
+        <span className="text-2xs text-ink-600">/ {world.maxDays}</span>
+        <span className="text-2xs text-oxblood-700 font-semibold ml-0.5">({daysLeft} left)</span>
       </div>
     </div>
   );
@@ -35,21 +71,39 @@ export function BottomNav() {
   const setActivePanel = useGameStore((s) => s.setActivePanel);
 
   return (
-    <nav className="flex items-stretch bg-slate-900 border-t border-slate-700 h-14">
-      {NAV_ITEMS.map((item) => (
-        <button
-          key={item.id}
-          onClick={() => setActivePanel(item.id)}
-          className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
-            activePanel === item.id
-              ? 'text-amber-400 border-t-2 border-amber-400'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <span className="text-lg">{item.icon}</span>
-          <span className="text-[10px] font-medium">{item.label}</span>
-        </button>
-      ))}
+    <nav className="wood flex items-stretch border-t-2 border-night-900 h-16 shadow-carved z-10">
+      {NAV_ITEMS.map((item) => {
+        const active = activePanel === item.id;
+        return (
+          <button
+            key={item.id}
+            onClick={() => setActivePanel(item.id)}
+            aria-current={active ? 'page' : undefined}
+            className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1 rounded-md my-1 mx-0.5 transition-all duration-100 ${
+              active
+                ? 'tab-inlay text-ink-900'
+                : 'text-parchment-300/85 hover:text-parchment-100 hover:bg-wood-900/40'
+            }`}
+          >
+            <span
+              className={`inline-flex items-center justify-center w-7 h-7 rounded-seal border ${
+                active
+                  ? 'border-brass-900/70 bg-brass-800/25'
+                  : 'border-parchment-300/25 bg-night-900/30'
+              }`}
+            >
+              <Glyph name={item.icon} className="w-[17px] h-[17px]" strokeWidth={1.9} />
+            </span>
+            <span
+              className={`text-2xs font-display font-bold leading-none tracking-tight max-w-full truncate px-0.5 ${
+                active ? '' : 'opacity-90'
+              }`}
+            >
+              {item.label}
+            </span>
+          </button>
+        );
+      })}
     </nav>
   );
 }
@@ -59,14 +113,19 @@ export function ChronicleLog() {
   const world = useGameStore((s) => s.world);
 
   return (
-    <div className="px-3 py-1 bg-slate-800/50 text-xs text-slate-300 max-h-20 overflow-y-auto">
+    <div
+      className="paper-aged border-t-2 border-wood-900 px-3 py-1.5 max-h-20 overflow-y-auto"
+      style={{ boxShadow: 'inset 0 3px 6px -3px rgba(58,37,23,0.55)' }}
+    >
       {world.chronicle.slice(-3).map((entry, i) => (
-        <div key={i} className="truncate">
-          <span className="text-slate-500">[Day {entry.day}]</span> {entry.text}
+        <div key={i} className="truncate font-display italic text-2xs text-ink-800 leading-relaxed">
+          <span className="not-italic font-bold text-brass-900 mr-1">Day {entry.day} —</span>
+          {entry.text}
         </div>
       ))}
       {log.slice(-2).map((entry, i) => (
-        <div key={`log-${i}`} className="truncate text-slate-400">
+        <div key={`log-${i}`} className="truncate font-display italic text-2xs text-ink-600 leading-relaxed">
+          <span className="text-brass-800 mr-1">❧</span>
           {entry}
         </div>
       ))}

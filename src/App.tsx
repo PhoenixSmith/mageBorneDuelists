@@ -12,7 +12,7 @@ function App() {
   const activePanel = useGameStore((s) => s.activePanel);
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-slate-950 text-white">
+    <div className="flex flex-col h-[100dvh] bg-night-800 text-ink-800 font-body">
       <TopBar />
       <div className="flex-1 overflow-hidden">
         {activePanel === 'map' && <MapPanel />}

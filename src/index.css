@@ -2,8 +2,519 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root {
-  height: 100%;
-  margin: 0;
-  overflow: hidden;
+/* ==========================================================================
+   MageBorne Duelists — "Enchanted Almanac" visual system
+   Parchment pages on a dark oak table: ink text, wood chrome, brass accents,
+   wax seals. All texture is CSS gradients — no image assets, no web fonts.
+   ========================================================================== */
+
+@layer base {
+  :root {
+    /* Element ink, set per-card by the .el-* classes below */
+    --el: #5a4634;
+    --el-deep: #3d2f24;
+    --el-wash: #e8dcc3;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body {
+    font-family: theme('fontFamily.body');
+    color: theme('colors.ink.800');
+    background-color: theme('colors.night.800');
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Serif numerals + titles everywhere they matter */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: theme('fontFamily.display');
+  }
+
+  ::selection {
+    background: theme('colors.brass.400');
+    color: theme('colors.ink.900');
+  }
+
+  :focus-visible {
+    outline: 2px solid theme('colors.brass.600');
+    outline-offset: 2px;
+  }
+
+  /* Slim brass scrollbars so scrolling panels stay in-world */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.parchment.500') transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: theme('colors.parchment.400');
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: theme('colors.brass.600');
+    background-clip: content-box;
+  }
+
+  /* Number inputs read as inked ledger fields */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+@layer components {
+  /* ---------------------------------------------------------------- SURFACES
+     Aged paper: warm base + soft light bloom + crossed fiber weave.
+     ------------------------------------------------------------------------ */
+  .paper {
+    background-color: theme('colors.parchment.100');
+    background-image:
+      radial-gradient(ellipse 80% 60% at 18% 12%, rgba(255, 253, 244, 0.75), transparent 60%),
+      radial-gradient(ellipse 70% 70% at 88% 88%, rgba(150, 116, 68, 0.16), transparent 62%),
+      radial-gradient(ellipse 60% 50% at 92% 8%, rgba(150, 116, 68, 0.1), transparent 60%),
+      repeating-linear-gradient(103deg, rgba(122, 92, 46, 0.035) 0 1px, transparent 1px 6px),
+      repeating-linear-gradient(7deg, rgba(122, 92, 46, 0.03) 0 1px, transparent 1px 9px);
+  }
+
+  .paper-aged {
+    background-color: theme('colors.parchment.200');
+    background-image:
+      radial-gradient(ellipse 80% 60% at 22% 10%, rgba(253, 246, 230, 0.6), transparent 60%),
+      radial-gradient(ellipse 70% 70% at 85% 90%, rgba(140, 106, 58, 0.2), transparent 60%),
+      repeating-linear-gradient(97deg, rgba(122, 92, 46, 0.045) 0 1px, transparent 1px 5px),
+      repeating-linear-gradient(11deg, rgba(122, 92, 46, 0.035) 0 1px, transparent 1px 8px);
+  }
+
+  /* Stained walnut, planked with the grain */
+  .wood {
+    background-color: theme('colors.wood.700');
+    background-image:
+      repeating-linear-gradient(88deg, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 7px),
+      repeating-linear-gradient(91deg, rgba(255, 214, 160, 0.05) 0 1px, transparent 1px 15px),
+      radial-gradient(ellipse 60% 120% at 12% 50%, rgba(255, 206, 150, 0.09), transparent 70%),
+      linear-gradient(180deg, #7d5a3a 0%, #5a3d26 55%, #35220f 100%);
+  }
+
+  /* Oxblood leather, pebbled */
+  .leather {
+    background-color: theme('colors.oxblood.800');
+    background-image:
+      radial-gradient(circle at 30% 25%, rgba(255, 190, 170, 0.09) 0 2px, transparent 3px),
+      radial-gradient(circle at 72% 68%, rgba(0, 0, 0, 0.22) 0 3px, transparent 4px),
+      linear-gradient(180deg, #8f4a3a 0%, #6a2a20 60%, #431612 100%);
+    background-size: 11px 11px, 17px 17px, 100% 100%;
+  }
+
+  /* Hammered brass */
+  .brass-plate {
+    background-image: linear-gradient(
+      165deg,
+      #e7d089 0%,
+      #c9a227 26%,
+      #a97f10 52%,
+      #d8b64d 74%,
+      #8a6209 100%
+    );
+    color: theme('colors.ink.900');
+  }
+
+  /* ------------------------------------------------------------ PAGE / FRAME
+     A printed almanac page: chunky ink border with an inset hairline rule.
+     ------------------------------------------------------------------------ */
+  .page {
+    @apply paper rounded-xl border-2 border-ink-700 shadow-page;
+    position: relative;
+  }
+  .page::after {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px solid rgba(90, 70, 52, 0.34);
+    border-radius: 0.5rem;
+    pointer-events: none;
+  }
+
+  /* Same treatment, no inner rule — for dense/small cards */
+  .plaque {
+    @apply paper rounded-xl border-2 border-ink-700 shadow-card;
+  }
+  .plaque-aged {
+    @apply paper-aged rounded-xl border-2 border-ink-700 shadow-card;
+  }
+
+  /* A little pasted note / clipping */
+  .slip {
+    @apply paper-aged rounded-lg border border-ink-600/70;
+    box-shadow: 0 1px 3px -1px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Ornate scrying window for the 3D canvas */
+  .scrying-frame {
+    position: relative;
+    border: 3px solid theme('colors.wood.800');
+    box-shadow:
+      inset 0 0 0 2px rgba(201, 162, 39, 0.5),
+      inset 0 0 30px 6px rgba(0, 0, 0, 0.6),
+      0 4px 14px -6px rgba(0, 0, 0, 0.9);
+  }
+  .scrying-frame::before,
+  .scrying-frame::after {
+    content: '';
+    position: absolute;
+    z-index: 2;
+    width: 18px;
+    height: 18px;
+    border: 2px solid theme('colors.brass.600');
+    pointer-events: none;
+  }
+  .scrying-frame::before {
+    top: 4px;
+    left: 4px;
+    border-right: none;
+    border-bottom: none;
+    border-top-left-radius: 6px;
+  }
+  .scrying-frame::after {
+    bottom: 4px;
+    right: 4px;
+    border-left: none;
+    border-top: none;
+    border-bottom-right-radius: 6px;
+  }
+
+  /* -------------------------------------------------------------- TYPOGRAPHY */
+  .title-display {
+    @apply font-display font-bold tracking-wide text-ink-900;
+  }
+
+  /* Chapter heading: small-caps title flanked by an ink rule */
+  .chapter {
+    @apply font-display font-bold text-ink-800 uppercase;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    letter-spacing: 0.14em;
+  }
+  .chapter::after {
+    content: '';
+    flex: 1;
+    height: 0;
+    border-top: 1px solid rgba(90, 70, 52, 0.45);
+    border-bottom: 1px solid rgba(90, 70, 52, 0.2);
+    margin-top: 2px;
+  }
+
+  /* Hairline divider with a diamond pip in the middle */
+  .rule-ornate {
+    height: 10px;
+    position: relative;
+  }
+  .rule-ornate::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 0;
+    right: 0;
+    border-top: 1px solid rgba(90, 70, 52, 0.4);
+  }
+  .rule-ornate::after {
+    content: '';
+    position: absolute;
+    top: 1px;
+    left: 50%;
+    width: 7px;
+    height: 7px;
+    margin-left: -3.5px;
+    background: theme('colors.brass.700');
+    transform: rotate(45deg);
+  }
+
+  /* ----------------------------------------------------------------- BUTTONS
+     Carved, chunky, obviously pressable. 44px minimum tap target.
+     ------------------------------------------------------------------------ */
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border-2 font-display font-bold
+           tracking-wide transition-all duration-100 select-none px-4 text-sm;
+    min-height: 44px;
+  }
+  .btn:active:not(:disabled) {
+    @apply shadow-pressed;
+    transform: translateY(1px);
+  }
+  .btn:disabled {
+    @apply opacity-45 cursor-not-allowed;
+    filter: grayscale(0.45);
+  }
+
+  .btn-sm {
+    @apply px-3 text-2xs rounded-md;
+    min-height: 38px;
+  }
+
+  .btn-brass {
+    @apply brass-plate border-brass-900 text-ink-900 shadow-carved;
+    text-shadow: 0 1px 0 rgba(255, 244, 200, 0.55);
+  }
+  .btn-brass:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  .btn-wood {
+    @apply wood border-wood-900 text-parchment-100 shadow-carved;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  }
+  .btn-wood:hover:not(:disabled) {
+    filter: brightness(1.18);
+  }
+
+  .btn-ox {
+    @apply leather border-oxblood-900 text-parchment-100 shadow-carved;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  }
+  .btn-ox:hover:not(:disabled) {
+    filter: brightness(1.15);
+  }
+
+  .btn-moss {
+    @apply border-moss-deep text-parchment-50 shadow-carved;
+    background-image: linear-gradient(180deg, #63935a 0%, #4e7a45 55%, #31512c 100%);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  }
+  .btn-moss:hover:not(:disabled) {
+    filter: brightness(1.14);
+  }
+
+  /* Quiet action: ink on bare paper */
+  .btn-quiet {
+    @apply paper-aged border-ink-600 text-ink-800;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 1px 3px -1px rgba(0, 0, 0, 0.4);
+  }
+  .btn-quiet:hover:not(:disabled) {
+    @apply border-brass-700 bg-parchment-50;
+  }
+
+  /* -------------------------------------------------------------- WAX SEALS */
+  .seal {
+    @apply inline-flex items-center justify-center rounded-seal shadow-seal font-display font-bold;
+    border: 2px solid rgba(0, 0, 0, 0.32);
+    background-image: radial-gradient(
+      circle at 32% 28%,
+      rgba(255, 255, 255, 0.3),
+      rgba(0, 0, 0, 0.18) 72%
+    );
+  }
+  .seal-brass {
+    @apply seal brass-plate text-ink-900;
+    border-color: theme('colors.brass.900');
+  }
+  .seal-ox {
+    @apply seal text-parchment-100;
+    background-color: theme('colors.oxblood.700');
+    border-color: theme('colors.oxblood.900');
+  }
+  .seal-tide {
+    @apply seal text-parchment-100;
+    background-color: theme('colors.tide.DEFAULT');
+    border-color: theme('colors.tide.deep');
+  }
+  .seal-moss {
+    @apply seal text-parchment-100;
+    background-color: theme('colors.moss.DEFAULT');
+    border-color: theme('colors.moss.deep');
+  }
+  .seal-wood {
+    @apply seal wood text-parchment-100;
+    border-color: theme('colors.wood.900');
+  }
+  .seal-ink {
+    @apply seal text-parchment-100;
+    background-color: theme('colors.ink.700');
+    border-color: theme('colors.ink.900');
+  }
+  /* Arcane violet — focus / essence, everywhere it appears */
+  .seal-arcane {
+    @apply seal text-parchment-100;
+    background-color: theme('colors.tempest.DEFAULT');
+    border-color: theme('colors.tempest.deep');
+  }
+  /* Unstruck seal — an empty impression waiting to be sealed */
+  .seal-blank {
+    @apply seal text-ink-500;
+    background-color: theme('colors.parchment.300');
+    border-color: rgba(90, 70, 52, 0.55);
+    box-shadow: inset 0 2px 4px rgba(90, 70, 52, 0.35);
+  }
+
+  /* ------------------------------------------------------------ SPELL CARDS
+     A printed spell card: parchment face, inked frame, elemental band.
+     ------------------------------------------------------------------------ */
+  .spellcard {
+    @apply paper relative rounded-xl border-2 shadow-card overflow-hidden transition-all duration-100;
+    border-color: var(--el-deep);
+    background-image: linear-gradient(180deg, var(--el-wash) 0%, rgba(255, 255, 255, 0) 42%),
+      radial-gradient(ellipse 80% 60% at 18% 12%, rgba(255, 253, 244, 0.6), transparent 60%),
+      repeating-linear-gradient(103deg, rgba(122, 92, 46, 0.035) 0 1px, transparent 1px 6px);
+  }
+  /* Elemental band down the left edge */
+  .spellcard::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    background: linear-gradient(180deg, var(--el) 0%, var(--el-deep) 100%);
+    box-shadow: 1px 0 0 rgba(0, 0, 0, 0.25);
+  }
+  .spellcard-body {
+    padding-left: 12px;
+  }
+  .spellcard-tappable {
+    @apply cursor-pointer;
+  }
+  .spellcard-tappable:hover {
+    box-shadow: theme('boxShadow.card'), 0 0 0 2px rgba(201, 162, 39, 0.5);
+    transform: translateY(-1px);
+  }
+  .spellcard-active {
+    box-shadow: theme('boxShadow.card'), theme('boxShadow.gilt');
+  }
+
+  /* Inked label for a card entry (Cast / Maneuver / Empower …) */
+  .inked-label {
+    @apply font-display font-bold uppercase text-2xs;
+    letter-spacing: 0.09em;
+  }
+
+  /* ------------------------------------------------------------- LEDGER ROWS */
+  .ledger-row {
+    @apply border-b border-ink-700/25;
+  }
+  .ledger-row:nth-child(odd) {
+    background-color: rgba(217, 201, 168, 0.4);
+  }
+  .ledger-row:last-child {
+    @apply border-b-0;
+  }
+
+  /* ------------------------------------------------------------------- PIPS */
+  .pip {
+    @apply inline-block rounded-seal;
+    width: 8px;
+    height: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+  }
+  .pip-on {
+    background: theme('colors.brass.700');
+    box-shadow: inset 0 1px 0 rgba(255, 240, 190, 0.7);
+  }
+  .pip-off {
+    background: theme('colors.parchment.300');
+    box-shadow: inset 0 1px 2px rgba(90, 70, 52, 0.4);
+  }
+
+  /* --------------------------------------------------------- METER (VIT/FOC) */
+  .meter {
+    @apply rounded-seal overflow-hidden border border-ink-700;
+    background-color: theme('colors.parchment.300');
+    box-shadow: inset 0 2px 3px rgba(90, 70, 52, 0.45);
+  }
+  .meter-fill {
+    @apply h-full rounded-seal transition-all duration-300;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  }
+
+  /* --------------------------------------------------------------- CHROME */
+  /* Notched almanac page-edge tab (day counter) */
+  .page-edge {
+    @apply paper-aged font-display border-2 border-ink-700 text-ink-900;
+    border-radius: 4px 10px 10px 4px;
+    box-shadow: inset 2px 0 0 rgba(201, 162, 39, 0.8), 0 2px 5px -2px rgba(0, 0, 0, 0.7);
+  }
+
+  /* Bottom-nav active tab: brass inlaid into the wood */
+  .tab-inlay {
+    @apply brass-plate;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45), inset 0 -1px 0 rgba(255, 245, 205, 0.5);
+  }
+
+  /* Panel scroll container — the page sits on the dark table */
+  .panel-scroll {
+    @apply h-full overflow-y-auto;
+    background-color: theme('colors.night.800');
+    background-image:
+      radial-gradient(ellipse 90% 60% at 50% -10%, rgba(120, 84, 45, 0.35), transparent 70%),
+      repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 9px);
+  }
+
+  /* Empty-state / hint copy */
+  .marginalia {
+    @apply font-display italic text-ink-600;
+  }
+}
+
+/* ============================================================== ELEMENT INKS
+   Deliberately OUTSIDE @layer components: these classes are applied with
+   template strings (`el-${spell.element}`), which Tailwind's content scanner
+   cannot see — inside a layer they would be tree-shaken away.
+   Each sets the --el vars that spell cards, sigils and bands read from.
+   ========================================================================== */
+.el-fire {
+  --el: #c0392b;
+  --el-deep: #8b2418;
+  --el-wash: #f2dfd6;
+}
+.el-water {
+  --el: #2e6f8e;
+  --el-deep: #1d4a61;
+  --el-wash: #dbe7ec;
+}
+.el-wind {
+  --el: #4a9ebf;
+  --el-deep: #2c6c86;
+  --el-wash: #dcecf1;
+}
+.el-earth {
+  --el: #7a5c2e;
+  --el-deep: #523c1c;
+  --el-wash: #eae0c8;
+}
+.el-magma {
+  --el: #a8511e;
+  --el-deep: #743310;
+  --el-wash: #f0e0cf;
+}
+.el-lightning {
+  --el: #c08a1e;
+  --el-deep: #8a5f0d;
+  --el-wash: #f2e7c9;
+}
+.el-steam {
+  --el: #7c8b90;
+  --el-deep: #54606a;
+  --el-wash: #e2e7e7;
+}
+.el-storm {
+  --el: #5a5f9e;
+  --el-deep: #3a3d70;
+  --el-wash: #e1e1ef;
 }
