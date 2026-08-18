@@ -16,6 +16,7 @@ const coalHurl: BehaviorCard = {
   speed: 2,
   effect: 'Far attack for 3 damage. Inflict Burn (2 rounds).',
   range: 'far',
+  mechanics: { kind: 'attack', damage: 3, damageType: 'fire', condition: { type: 'burn', duration: 2 } },
 };
 
 const crushingAdvance: BehaviorCard = {
@@ -24,6 +25,7 @@ const crushingAdvance: BehaviorCard = {
   speed: 1,
   effect: 'Move one range band closer. If Engaged, attack for 4 damage.',
   range: 'engaged',
+  mechanics: { kind: 'move_closer', attackIfEngaged: 4 },
 };
 
 const feedFurnace: BehaviorCard = {
@@ -32,6 +34,7 @@ const feedFurnace: BehaviorCard = {
   speed: 1,
   effect: 'Consume nearby Flame terrain and heal 3 Vitality.',
   range: 'near',
+  mechanics: { kind: 'heal', amount: 3 },
 };
 
 const roar: BehaviorCard = {
@@ -40,6 +43,7 @@ const roar: BehaviorCard = {
   speed: 2,
   effect: 'Inflict Unsteady on all enemies.',
   range: 'far',
+  mechanics: { kind: 'attack', damage: 0, damageType: 'physical', condition: { type: 'unsteady', duration: 1 } },
 };
 
 const overheat: BehaviorCard = {
@@ -57,6 +61,7 @@ const boulderThrowGiant: BehaviorCard = {
   speed: 2,
   effect: 'Deal 4 damage at Near or Far. Inflict Unsteady.',
   range: ['near', 'far'],
+  mechanics: { kind: 'attack', damage: 4, damageType: 'physical', condition: { type: 'unsteady', duration: 1 } },
 };
 
 const backhand: BehaviorCard = {
@@ -65,6 +70,7 @@ const backhand: BehaviorCard = {
   speed: 1,
   effect: 'Deal 5 damage at Engaged range. If the target moved this round, deal +2.',
   range: 'engaged',
+  mechanics: { kind: 'attack_on_engaged', damage: 5, damageType: 'physical' },
 };
 
 const groundSlam: BehaviorCard = {
@@ -73,6 +79,7 @@ const groundSlam: BehaviorCard = {
   speed: 1,
   effect: 'Deal 3 damage to all enemies at Engaged range. Inflict Bound.',
   range: 'engaged',
+  mechanics: { kind: 'attack', damage: 3, damageType: 'physical', condition: { type: 'bound', duration: 1 } },
 };
 
 const stomp: BehaviorCard = {
@@ -81,6 +88,7 @@ const stomp: BehaviorCard = {
   speed: 2,
   effect: 'Move one range band closer. Inflict Unsteady on enemies at Engaged range.',
   range: 'near',
+  mechanics: { kind: 'move_closer' },
 };
 
 const boulderShield: BehaviorCard = {
@@ -89,6 +97,7 @@ const boulderShield: BehaviorCard = {
   speed: 1,
   effect: 'Gain 4 Guard. Cannot move this round.',
   range: 'engaged',
+  mechanics: { kind: 'guard', amount: 4 },
 };
 
 // Storm Wraith behaviors
@@ -98,6 +107,7 @@ const lightningBolt: BehaviorCard = {
   speed: 4,
   effect: 'Deal 3 damage at Near or Far. If the target is Soaked, deal +2. Inflict Exposed.',
   range: ['near', 'far'],
+  mechanics: { kind: 'attack', damage: 3, damageType: 'lightning', condition: { type: 'exposed', duration: 1 } },
 };
 
 const windSlash: BehaviorCard = {
@@ -106,6 +116,7 @@ const windSlash: BehaviorCard = {
   speed: 5,
   effect: 'Deal 2 damage at Engaged range. Move the target one range band away. Inflict Unsteady.',
   range: 'engaged',
+  mechanics: { kind: 'attack_on_engaged', damage: 2, damageType: 'wind' },
 };
 
 const galeBurst: BehaviorCard = {
@@ -114,6 +125,7 @@ const galeBurst: BehaviorCard = {
   speed: 4,
   effect: 'Move two range bands. Draw an extra behavior card next round.',
   range: 'far',
+  mechanics: { kind: 'move_away' },
 };
 
 const stormCall: BehaviorCard = {
@@ -122,6 +134,7 @@ const stormCall: BehaviorCard = {
   speed: 2,
   effect: 'Inflict Soaked on all enemies. Place one Storm counter. At three counters, deal 3 damage to all enemies.',
   range: 'far',
+  mechanics: { kind: 'attack', damage: 0, damageType: 'water', condition: { type: 'soaked', duration: 2 } },
 };
 
 const vanish: BehaviorCard = {
@@ -130,6 +143,7 @@ const vanish: BehaviorCard = {
   speed: 5,
   effect: 'Move one range band away. Gain 3 Guard. Cannot be targeted until next round.',
   range: 'far',
+  mechanics: { kind: 'guard', amount: 3 },
 };
 
 // --- Behavior Card Registry -------------------------------------------------

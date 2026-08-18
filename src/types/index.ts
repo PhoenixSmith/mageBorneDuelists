@@ -173,6 +173,7 @@ export interface CombatParticipant {
   id: string;
   name: string;
   isPlayer: boolean;
+  monsterCatalogId?: string;
   vitality: number;
   maxVitality: number;
   focus: number;
@@ -231,7 +232,16 @@ export interface BehaviorCard {
   speed: number;
   effect: string;
   range: RangeBand | RangeBand[];
+  mechanics?: BehaviorMechanics;
 }
+
+export type BehaviorMechanics =
+  | { kind: 'attack'; damage: number; damageType?: 'physical' | 'fire' | 'water' | 'wind' | 'earth' | 'lightning'; condition?: { type: ConditionType; duration: number } }
+  | { kind: 'attack_on_engaged'; damage: number; damageType?: 'physical' | 'fire' | 'water' | 'wind' | 'earth' | 'lightning' }
+  | { kind: 'move_closer'; attackIfEngaged?: number }
+  | { kind: 'heal'; amount: number }
+  | { kind: 'guard'; amount: number }
+  | { kind: 'move_away' };
 
 export interface LootEntry {
   type: 'coin' | 'reagent' | 'item' | 'spell';

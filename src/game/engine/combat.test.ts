@@ -376,7 +376,11 @@ export function runTests(): void {
 
     const result = resolveRound(combat);
     assert(result.round === 2, 'Round advances to 2 after resolution');
-    assert(result.participants.every((p) => p.queuedSpells.length === 0), 'Queued spells cleared after round');
+    // Player's queued spells are cleared; the monster auto-queues its next-round action
+    const playerAfter = result.participants.find((p) => p.isPlayer);
+    assert(playerAfter ? playerAfter.queuedSpells.length === 0 : true, 'Player queued spells cleared after round');
+    const monsterAfter = result.participants.find((p) => !p.isPlayer);
+    assert(monsterAfter ? monsterAfter.queuedSpells.length === 1 : true, 'Monster auto-queues next-round action');
   });
 
   describe('Round Resolution - Guard Expires', () => {

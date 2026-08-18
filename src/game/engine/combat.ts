@@ -306,6 +306,7 @@ export function initCombat(
         id: `monster_${idx}`,
         name: monster.name,
         isPlayer: false,
+        monsterCatalogId: p.monsterId,
         vitality: monster.vitality,
         maxVitality: monster.vitality,
         focus: 0,
@@ -324,7 +325,7 @@ export function initCombat(
     return {
       id: mage.id,
       name: mage.name,
-      isPlayer: true,
+      isPlayer: mage.id === 'player',
       vitality: mage.vitality,
       maxVitality: mage.maxVitality,
       focus: mage.maxFocus,
@@ -405,7 +406,7 @@ export function resolveRound(state: CombatState): CombatState {
   for (const p of s.participants) {
     if (!p.isPlayer) {
       // Pick a behavior card (cycle through deck)
-      const monster = getMonster(s.participants.find((sp) => sp.id === p.id)?.name || '');
+      const monster = p.monsterCatalogId ? getMonster(p.monsterCatalogId) : undefined;
       if (monster) {
         const behaviorIdx = (s.round - 1) % monster.behaviorDeck.length;
         const behaviorId = monster.behaviorDeck[behaviorIdx];
@@ -530,6 +531,112 @@ export function resolveRound(state: CombatState): CombatState {
 
   log.push(makeLogEntry(s.round, `Round ${s.round} begins.`, 'info'));
 
+  // Queue the next monster action for the new round
+  for (const p of s.participants) {
+    if (!p.isPlayer && p.monsterCatalogId) {
+      s = generateMonsterAction(s, p.id);
+    }
+  }
+
+  return s;
+}
+
+/**
+ * Resolve a monster behavior card's mechanical effect.
+ */
+function resolveBehaviorEffect(
+  state: CombatState,
+  entry: TimelineEntry,
+  mech: import('../../types').BehaviorMechanics,
+  name: string,
+  log: CombatLogEntry[],
+): CombatState {
+  let s = state;
+  const caster = findParticipant(s, entry.casterId);
+  if (!caster) return s;
+  const targetId = entry.spell.targetId;
+  const target = targetId ? findParticipant(s, targetId) : undefined;
+
+  // Mark resolved
+  s = {
+    ...s,
+    timeline: s.timeline.map((te) => (te === entry ? { ...te, resolved: true } : te)),
+  };
+
+  const applyConditionTo = (tid: string, cond: { type: import('../../types').ConditionType; duration: number }) => {
+    s = applyCondition(s, tid, { type: cond.type, duration: cond.duration });
+    log.push(makeLogEntry(s.round, `${caster.name}'s ${name} inflicts ${cond.type} on ${findParticipant(s, tid)?.name}.`, 'condition'));
+  };
+
+  switch (mech.kind) {
+    case 'attack': {
+      if (!target) break;
+      if (mech.damage > 0) {
+        s = applyDamage(s, target.id, mech.damage, mech.damageType ?? 'physical');
+        log.push(makeLogEntry(s.round, `${caster.name} uses ${name} on ${target.name} for ${mech.damage} ${mech.damageType ?? 'physical'} damage.`, 'damage'));
+      }
+      if (mech.condition && target) applyConditionTo(target.id, mech.condition);
+      break;
+    }
+    case 'attack_on_engaged': {
+      if (!target) break;
+      if (target.range === 'engaged' && caster.range === 'engaged') {
+        s = applyDamage(s, target.id, mech.damage, mech.damageType ?? 'physical');
+        log.push(makeLogEntry(s.round, `${caster.name} uses ${name} on ${target.name} for ${mech.damage} damage at Engaged range.`, 'damage'));
+      } else {
+        log.push(makeLogEntry(s.round, `${caster.name}'s ${name} finds no target at Engaged range.`, 'fizzle'));
+      }
+      break;
+    }
+    case 'move_closer': {
+      const order: RangeBand[] = ['far', 'near', 'engaged'];
+      const idx = order.indexOf(caster.range);
+      if (idx < order.length - 1) {
+        s = updateParticipant(s, caster.id, (p) => ({ ...p, range: order[idx + 1] }));
+        log.push(makeLogEntry(s.round, `${caster.name} advances to ${order[idx + 1]} range.`, 'info'));
+      }
+      if (mech.attackIfEngaged && target) {
+        const casterNow = findParticipant(s, caster.id);
+        if (casterNow?.range === 'engaged' && target.range === 'engaged') {
+          s = applyDamage(s, target.id, mech.attackIfEngaged, 'physical');
+          log.push(makeLogEntry(s.round, `${caster.name}'s ${name} strikes ${target.name} for ${mech.attackIfEngaged} damage!`, 'damage'));
+        }
+      }
+      break;
+    }
+    case 'move_away': {
+      const order: RangeBand[] = ['far', 'near', 'engaged'];
+      const idx = order.indexOf(caster.range);
+      if (idx > 0) {
+        s = updateParticipant(s, caster.id, (p) => ({ ...p, range: order[idx - 1] }));
+        log.push(makeLogEntry(s.round, `${caster.name} retreats to ${order[idx - 1]} range.`, 'info'));
+      }
+      break;
+    }
+    case 'heal': {
+      s = updateParticipant(s, caster.id, (p) => ({
+        ...p,
+        vitality: Math.min(p.maxVitality, p.vitality + mech.amount),
+      }));
+      log.push(makeLogEntry(s.round, `${caster.name} heals ${mech.amount} Vitality (${name}).`, 'info'));
+      break;
+    }
+    case 'guard': {
+      s = updateParticipant(s, caster.id, (p) => ({ ...p, guard: p.guard + mech.amount }));
+      log.push(makeLogEntry(s.round, `${caster.name} gains ${mech.amount} Guard (${name}).`, 'info'));
+      break;
+    }
+  }
+
+  // Check for defeat after damage
+  if (s.result === 'ongoing') {
+    for (const p of s.participants) {
+      if (p.vitality <= 0) {
+        s = { ...s, result: p.isPlayer ? 'defeat' : 'victory', phase: 'resolved' };
+      }
+    }
+  }
+
   return s;
 }
 
@@ -545,6 +652,11 @@ function resolveSpellEffect(
   let s = state;
   const spell = getSpell(entry.spell.cardId);
   if (!spell) {
+    // Behavior card (monster action)?
+    const behavior = getBehaviorCard(entry.spell.cardId);
+    if (behavior?.mechanics) {
+      return resolveBehaviorEffect(s, entry, behavior.mechanics, behavior.name, log);
+    }
     log.push(makeLogEntry(s.round, `Unknown spell: ${entry.spell.cardId}`, 'fizzle'));
     return s;
   }
@@ -747,7 +859,9 @@ export function generateMonsterAction(
   state: CombatState,
   monsterId: string,
 ): CombatState {
-  const monster = getMonster(monsterId);
+  const participant = state.participants.find((p) => p.id === monsterId);
+  const catalogId = participant?.monsterCatalogId ?? monsterId;
+  const monster = getMonster(catalogId);
   if (!monster) return state;
 
   const behaviorIdx = (state.round - 1) % monster.behaviorDeck.length;
