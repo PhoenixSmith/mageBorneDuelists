@@ -8,6 +8,7 @@ const NAV_ITEMS: Array<{ id: PanelType; label: string; icon: string }> = [
   { id: 'quests', label: 'Quests', icon: '❗' },
   { id: 'shop', label: 'Shop', icon: '🏪' },
   { id: 'character', label: 'Mage', icon: '🧙' },
+  { id: 'conclave', label: 'Conclave', icon: '🏆' },
 ];
 
 export function TopBar() {

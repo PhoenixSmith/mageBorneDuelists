@@ -13,6 +13,7 @@ import {
   generateEncounter,
 } from '../game/engine/world';
 import { initCombat, resolveRound, queueSpell, generateMonsterAction } from '../game/engine/combat';
+import { initConclave, runGrandTrial, runSwissRound, runAscensionDuel } from '../game/engine/conclave';
 
 const SEED = 42;
 
@@ -34,6 +35,10 @@ interface GameActions {
   startCombat: (monsterId: string) => void;
   resolveCombatRound: () => void;
   queueCard: (cardId: string, use: CardUse) => void;
+  startConclave: () => void;
+  resolveGrandTrial: () => void;
+  resolveSwissRound: () => void;
+  resolveAscensionDuel: () => void;
 }
 
 export type Store = GameState & GameActions;
@@ -213,6 +218,49 @@ export const useGameStore = create<Store>((set, get) => ({
     const newCombat = queueSpell(combat, playerId, cardId, use, monsterId);
     set({
       world: { ...state.world, currentCombat: newCombat },
+    });
+  },
+
+  startConclave: () => {
+    const state = get();
+    const conclave = initConclave(state.world.player);
+    set({
+      world: { ...state.world, conclave },
+      activePanel: 'conclave',
+      log: [...state.log.slice(-199), 'The Conclave begins!'],
+    });
+  },
+
+  resolveGrandTrial: () => {
+    const state = get();
+    if (!state.world.conclave) return;
+    const conclave = runGrandTrial(state.world.conclave);
+    set({
+      world: { ...state.world, conclave },
+      log: [...state.log.slice(-199), 'Grand Trial complete.'],
+    });
+  },
+
+  resolveSwissRound: () => {
+    const state = get();
+    if (!state.world.conclave) return;
+    const conclave = runSwissRound(state.world.conclave);
+    set({
+      world: { ...state.world, conclave },
+      log: [...state.log.slice(-199), `Swiss round ${conclave.currentSwissRound} complete.`],
+    });
+  },
+
+  resolveAscensionDuel: () => {
+    const state = get();
+    if (!state.world.conclave) return;
+    const conclave = runAscensionDuel(state.world.conclave);
+    const winnerName = conclave.winner
+      ? conclave.participants.find(m => m.id === conclave.winner)?.name
+      : null;
+    set({
+      world: { ...state.world, conclave },
+      log: [...state.log.slice(-199), winnerName ? `${winnerName} wins the Conclave!` : 'Ascension Duel complete.'],
     });
   },
 }));

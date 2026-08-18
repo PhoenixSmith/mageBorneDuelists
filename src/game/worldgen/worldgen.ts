@@ -253,6 +253,7 @@ export function generateWorld(seed: number): WorldState {
       type: 'discovery',
     }],
     currentCombat: null,
+    conclave: null,
     playerHexId: startHex?.hexId ?? '0,0',
   };
 }

@@ -297,6 +297,7 @@ export interface WorldState {
   completedQuests: string[];
   chronicle: ChronicleEntry[];
   currentCombat: CombatState | null;
+  conclave: ConclaveState | null;
   playerHexId: string;
 }
 
@@ -362,11 +363,54 @@ export interface ShopState {
 
 // --- Store ------------------------------------------------------------------
 
-export type PanelType = 'map' | 'deck' | 'combat' | 'quests' | 'shop' | 'character';
+export type PanelType = 'map' | 'deck' | 'combat' | 'quests' | 'shop' | 'character' | 'conclave';
 
 export interface GameState {
   world: WorldState;
   activePanel: PanelType;
   selectedHexId: string | null;
+  log: string[];
+}
+
+// --- Conclave ----------------------------------------------------------------
+
+export type ConclavePhase = 'grand_trial' | 'swiss' | 'ascension' | 'complete';
+export type MagePersonality = 'aggressive' | 'defensive' | 'control' | 'greedy' | 'adaptive';
+
+export interface RivalMage {
+  mage: Mage;
+  personality: MagePersonality;
+  description: string;
+}
+
+export interface ConclaveStanding {
+  mageId: string;
+  name: string;
+  wins: number;
+  losses: number;
+  points: number;
+  grandTrialScore: number;
+  eliminated: boolean;
+}
+
+export interface ConclaveMatch {
+  id: string;
+  round: number;
+  player1Id: string;
+  player2Id: string;
+  winnerId: string | null;
+  log: string[];
+  resolved: boolean;
+}
+
+export interface ConclaveState {
+  phase: ConclavePhase;
+  participants: Mage[];
+  standings: ConclaveStanding[];
+  matches: ConclaveMatch[];
+  currentSwissRound: number;
+  maxSwissRounds: number;
+  ascensionFinalists: string[];
+  winner: string | null;
   log: string[];
 }

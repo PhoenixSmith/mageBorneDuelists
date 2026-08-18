@@ -6,6 +6,7 @@ import { CombatPanel } from './components/panels/CombatPanel';
 import { QuestsPanel } from './components/panels/QuestsPanel';
 import { ShopPanel } from './components/panels/ShopPanel';
 import { CharacterPanel } from './components/panels/CharacterPanel';
+import { ConclavePanel } from './components/panels/ConclavePanel';
 
 function App() {
   const activePanel = useGameStore((s) => s.activePanel);
@@ -20,6 +21,7 @@ function App() {
         {activePanel === 'quests' && <QuestsPanel />}
         {activePanel === 'shop' && <ShopPanel />}
         {activePanel === 'character' && <CharacterPanel />}
+        {activePanel === 'conclave' && <ConclavePanel />}
       </div>
       <ChronicleLog />
       <BottomNav />
